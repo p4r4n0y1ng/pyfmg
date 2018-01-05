@@ -156,7 +156,8 @@ class FortiManager(object):
             if percent != 100:
                 if time.time() - start >= timeout:
                     self.dprint('Task did not complete in efficient time. The timeout value was {}'.format(timeout))
-                    break
+                    return 1, {'msg': 'Task did not complete in efficient time. '
+                                      'The timeout value was {}'.format(timeout)}
                 else:
                     time.sleep(sleep_time)
         end_task_time = datetime.now()
