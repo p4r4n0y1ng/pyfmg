@@ -4,7 +4,7 @@ Represents the base components of the Fortinet FortiManager JSON-RPC interface. 
 
 ## Code Example
 
-Standard format for a FortiManager JSON-RPC is as follows:
+Standard format for a FortiManager JSON-RPC is utilized:
 ```
 {
   "method": "get|add|update|set|delete|replace|clone|exec|move",
@@ -12,18 +12,7 @@ Standard format for a FortiManager JSON-RPC is as follows:
   "session": "...",
   "id": 1,
 }
-```        
-The *method* *id* and *session* attributes are abstracted and are not required to be submitted by the calling class. As the calling code calls the 'get, add, delete, execute, etc...' operation, this abstraction fills in the correct *method* value as required.
-
-The *session* attribute is filled in after each response object is received and thus carried over for subsequent calls.
-
-The *id* field is also provided in the call and can be used to track calls based on each REQUEST.
-
-The *params* attribute is where the FortiManager gets the standard 'data' that it requires to fulfill a request.
-Therefore most of what is required for the FortiManager to have the appropriate information for an API call, is
-a JSON object in the appropriate format provided in the *params* attribute. However, the outside portion of
-this call (*method*, *id*, and *session* attributes) are also required. For the sake of allowing changes in future
-code, this package utilizes the python **\**kwargs** parameter for the params input. The **\*args** parameter is included throughout the package, but is only added for future expansion and is not utilized currently.
+```
 
 **Of Importance** is that this package uses context behavior for the FortiManager instance, so the **with** keyword can be utilized. This ensures that the FortiManager instance is logged into upon instantiation and is logged out of once the scope of the **with** statement is completed. For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the user name admin and a password of <blank>, the user would simply type:
 
