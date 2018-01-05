@@ -4,15 +4,7 @@ Represents the base components of the Fortinet FortiManager JSON-RPC interface. 
 
 ## Code Example
 
-Standard format for a FortiManager JSON-RPC is utilized:
-```
-{
-  "method": "get|add|update|set|delete|replace|clone|exec|move",
-  "params": [ ... ],
-  "session": "...",
-  "id": 1,
-}
-```
+Standard format for a FortiManager JSON-RPC is utilized.
 
 **Of Importance** is that this package uses context behavior for the FortiManager instance, so the **with** keyword can be utilized. This ensures that the FortiManager instance is logged into upon instantiation and is logged out of once the scope of the **with** statement is completed. For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the user name admin and a password of <blank>, the user would simply type:
 
