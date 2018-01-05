@@ -1,6 +1,6 @@
 ## Synopsis
 
-Represents the base components of the Fortinet FortiManager JSON-RPC interface. This code is based on the fmg_jsoniapi.py code provided in the ftntlib package as provided on the Fortinet Developer Network (FNDN) that was originally written by Ashton Turpin. It has since been modified by JP Forcioli as well as several others within Fortinet. This has now been streamlined and modified to utilize the standard **\**kwargs** functionality as well as has been modified extensively to be more scalable and provide context management and other aspects.
+Represents the base components of the Fortinet FortiManager JSON-RPC interface. This code is based on the fmg_jsonapi.py code provided in the ftntlib package as provided on the Fortinet Developer Network (FNDN) that was originally written by Ashton Turpin. It has since been modified by JP Forcioli as well as several others within Fortinet. This has now been streamlined and modified to utilize the standard **\**kwargs** functionality as well as has been modified extensively to be more scalable and provide context management and other aspects.
 
 ## Code Example
 
