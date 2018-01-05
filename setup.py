@@ -7,7 +7,7 @@ reqs = [str(ir.req) for ir in install_reqs]
 
 setup(
     name='pyfmg',
-    version='0.5.0',
+    version='0.6.0',
     packages=find_packages(),
     url='https://github.com/p4r4n0y1ng/pyfmg',
     license='Apache 2.0',
