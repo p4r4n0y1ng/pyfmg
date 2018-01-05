@@ -59,7 +59,7 @@ Utilizing the library is relatively simple.
 Assuming you are within the with context and still using **fmg_instance** as before, to get all managed devices in the **root** adom, the following would be used:
 
 ```
-fmg_instance.get('/dvmdb/adom/root/device')
+fmg_instance.get(url to get devices for FortiManager version)
 ```
 
 To **add** an address group the following would be used:
@@ -72,13 +72,13 @@ data = {
             'subnet': ['10.1.1.0', '255.255.255.255'],
             'type': 0,
         }
-        fmg_instance.add('pm/config/adom/root/obj/firewall/address', **data)
+        fmg_instance.add(URL to add address group objects for FortiManager version, **data)
 ```
 
 Notice how the **data** dictionary is created and then sent in as **\**data**. This is because there are dashes in the keys of the dictionary that is required and dashes are not allowed in a keyword argument setup. For instance, let's assume that **allow-routing** and **associated-interface** are not required for this call. In that case, the call could have been:
 
 ```
-fmg_instance.add('pm/config/adom/root/obj/firewall/address', name='test_addr_object', subnet=['10.1.1.0', '255.255.255.255'],type=0)
+fmg_instance.add(URL to add address object for FortiManager version, name='test_addr_object', subnet=['10.1.1.0', '255.255.255.255'],type=0)
 ```
 
 Notice that all you have to do is send in the data that needs to be sent to the FortiManager appliance in the **\**kwargs** field - this makes calls extremely simple - send in a URL and the keyword arguments and the rest is taken care of.
