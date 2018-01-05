@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+from datetime import datetime
+import time
 import logging
 import json
 import requests
+
 
 log = logging.getLogger("fortimanager")
 
@@ -123,6 +126,43 @@ class FortiManager(object):
         assert response['id'] == json_request['id']
         self.dprint('RESPONSE:', response)
         return self._handle_response(response)
+
+    def track_task(self, task_id, sleep_time=5, retrieval_fail_gate=10, timeout=120):
+        begin_task_time = datetime.now()
+        start = time.time()
+        self.dprint('Task begins at {time}'.format(time=str(begin_task_time)))
+        percent = 0
+        code_fail = 0
+        code = 1
+        task_info = ''
+        while percent != 100:
+            code, task_info = self.get('/task/task/{taskid}'.format(taskid=task_id))
+            if code == 0:
+                percent = int(task_info['percent'])
+                num_done = int(task_info['num_done'])
+                num_err = int(task_info['num_err'])
+                num_lines = int(task_info['num_lines'])
+                self.dprint('At timestamp {timestamp}:\nTask {taskid} is at {percent}% completion.\n{num_err} '
+                            'tasks have returned an error.'.format(timestamp=datetime.now(),
+                                                                   taskid=str(task_id), percent=str(percent),
+                                                                   num_done=str(num_done), num_lines=str(num_lines),
+                                                                   num_err=str(num_err)), task_info)
+            else:
+                code_fail += 1
+            if code_fail == retrieval_fail_gate:
+                self.dprint('Task info retrieval failed over {fail_gate} times. Something has caused issues '
+                            'with task {taskid}.'.format(taskid=task_id, fail_gate=retrieval_fail_gate))
+                return code, task_info
+            if percent != 100:
+                if time.time() - start >= timeout:
+                    self.dprint('Task did not complete in efficient time. The timeout value was {}'.format(timeout))
+                    break
+                else:
+                    time.sleep(sleep_time)
+        end_task_time = datetime.now()
+        self.dprint('Task completion is at {time}'.format(time=str(end_task_time)))
+        self.dprint('Total time to complete is {time}'.format(time=str(end_task_time-begin_task_time)))
+        return code, task_info
 
     def login(self):
         self._url = '{proto}://{host}/jsonrpc'.format(proto='https' if self._use_ssl else 'http', host=self._host)
