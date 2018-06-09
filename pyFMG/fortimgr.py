@@ -180,7 +180,8 @@ class FortiManager(object):
         return self.login()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return self.logout()
+        self.logout()
+        return True
 
     @staticmethod
     def common_datagram_params(url, **kwargs):

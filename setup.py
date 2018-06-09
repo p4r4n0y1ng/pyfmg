@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyfmg',
-    version='0.6.1',
+    version='0.6.2',
     packages=find_packages(),
     url='https://github.com/p4r4n0y1ng/pyfmg',
     license='Apache 2.0',
