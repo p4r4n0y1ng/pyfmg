@@ -10,6 +10,79 @@ import requests
 log = logging.getLogger("fortimanager")
 
 
+class FMGLockContext(object):
+
+    def __init__(self, fmg):
+        self._fmg = fmg
+        self._locked_adom_list = list()
+        self._uses_workspace = False
+
+    @property
+    def uses_workspace(self):
+        return self._uses_workspace
+
+    @uses_workspace.setter
+    def uses_workspace(self, val):
+        self._uses_workspace = val
+
+    def add_adom_to_lock_list(self, adom):
+        if adom not in self._locked_adom_list:
+            self._locked_adom_list.append(adom)
+
+    def remove_adom_from_lock_list(self, adom):
+        if adom in self._locked_adom_list:
+            self._locked_adom_list.remove(adom)
+
+    def check_mode(self):
+        url = '/cli/global/system/global'
+        code, resp_obj = self._fmg.get(url)
+        if resp_obj["workspace-mode"] != 0:
+            self.uses_workspace = True
+
+    def run_unlock(self):
+        for adom_locked in self._locked_adom_list:
+            self.unlock_adom(adom_locked)
+
+    def lock_adom(self, adom=None, *args, **kwargs):
+        if adom:
+            if adom.lower() == "global":
+                url = '/dvmdb/global/workspace/lock/'
+            else:
+                url = '/dvmdb/adom/{adom}/workspace/lock/'.format(adom=adom)
+        else:
+            url = '/dvmdb/adom/root/workspace/lock'
+        code, respobj = self._fmg.execute(url, {}, *args, **kwargs)
+        if code == 0 and respobj["message"].lower() == "ok":
+            self.add_adom_to_lock_list(adom)
+        return code, respobj
+
+    def unlock_adom(self, adom=None, *args, **kwargs):
+        if adom:
+            if adom.lower() == "global":
+                url = '/dvmdb/global/workspace/unlock/'
+            else:
+                url = '/dvmdb/adom/{adom}/workspace/unlock/'.format(adom=adom)
+        else:
+            url = '/dvmdb/adom/root/workspace/unlock'
+        code, respobj = self._fmg.execute(url, {}, *args, **kwargs)
+        if code == 0 and respobj["message"].lower() == "ok":
+            self.remove_adom_from_lock_list(adom)
+        return code, respobj
+
+    def commit_changes(self, adom=None, aux=False, *args, **kwargs):
+        if adom:
+            if aux:
+                url = '/pm/config/adom/{adom}/workspace/commit'.format(adom=adom)
+            else:
+                if adom.lower() == "global":
+                    url = '/dvmdb/global/workspace/commit/'
+                else:
+                    url = '/dvmdb/adom/{adom}/workspace/commit'.format(adom=adom)
+        else:
+            url = '/dvmdb/adom/root/workspace/commit'
+        return self._fmg.execute(url, {}, *args, **kwargs)
+
+
 class FortiManager(object):
 
     def __init__(self, host, user, passwd, debug=False, use_ssl=True, verify_ssl=False, timeout=300,
@@ -25,6 +98,7 @@ class FortiManager(object):
         self._req_id = 0
         self._sid = None
         self._url = None
+        self._lock_ctx = FMGLockContext(self)
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -88,6 +162,19 @@ class FortiManager(object):
     def _set_sid(self, response):
         if self.sid is None and 'session' in response:
             self.sid = response['session']
+
+    def _configure_lock_ctx(self):
+        if self._lock_ctx is None:
+            self._lock_ctx = FMGLockContext(self)
+
+    def lock_adom(self, adom=None, *args, **kwargs):
+        return self._lock_ctx.lock_adom(adom, *args, **kwargs)
+
+    def unlock_adom(self, adom=None, *args, **kwargs):
+        return self._lock_ctx.unlock_adom(adom, *args, **kwargs)
+
+    def commit_changes(self, adom=None, aux=False, *args, **kwargs):
+        return self._lock_ctx.commit_changes(adom, aux, *args, **kwargs)
 
     def _handle_response(self, response):
         try:
@@ -168,10 +255,13 @@ class FortiManager(object):
     def login(self):
         self._url = '{proto}://{host}/jsonrpc'.format(proto='https' if self._use_ssl else 'http', host=self._host)
         self.execute('sys/login/user', passwd=self._passwd, user=self._user,)
+        self._lock_ctx.check_mode()
         return self
 
     def logout(self):
         if self.sid is not None:
+            if self._lock_ctx.uses_workspace:
+                self._lock_ctx.run_unlock()
             ret_code, response = self.execute('sys/logout')
             self.sid = None
             return ret_code, response
