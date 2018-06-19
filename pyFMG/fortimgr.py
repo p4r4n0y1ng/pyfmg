@@ -163,10 +163,6 @@ class FortiManager(object):
         if self.sid is None and 'session' in response:
             self.sid = response['session']
 
-    def _configure_lock_ctx(self):
-        if self._lock_ctx is None:
-            self._lock_ctx = FMGLockContext(self)
-
     def lock_adom(self, adom=None, *args, **kwargs):
         return self._lock_ctx.lock_adom(adom, *args, **kwargs)
 
@@ -273,8 +269,11 @@ class FortiManager(object):
         self.logout()
 
     @staticmethod
-    def common_datagram_params(url, **kwargs):
+    def common_datagram_params(url, *args, **kwargs):
         params = [{'url': url}]
+        if args:
+            for arg in args:
+                params[0].update(arg)
         if kwargs:
             data = kwargs
             params[0]['data'] = data
@@ -290,25 +289,25 @@ class FortiManager(object):
         return self._post_request('get', params)
 
     def add(self, url, *args, **kwargs):
-        return self._post_request('add', self.common_datagram_params(url, **kwargs))
+        return self._post_request('add', self.common_datagram_params(url, *args, **kwargs))
 
     def update(self, url, *args, **kwargs):
-        return self._post_request('update', self.common_datagram_params(url, **kwargs))
+        return self._post_request('update', self.common_datagram_params(url, *args, **kwargs))
 
     def set(self, url, *args, **kwargs):
-        return self._post_request('set', self.common_datagram_params(url, **kwargs))
+        return self._post_request('set', self.common_datagram_params(url, *args, **kwargs))
 
     def delete(self, url, *args, **kwargs):
-        return self._post_request('delete', self.common_datagram_params(url, **kwargs))
+        return self._post_request('delete', self.common_datagram_params(url, *args, **kwargs))
 
     def replace(self, url, *args, **kwargs):
-        return self._post_request('replace', self.common_datagram_params(url, **kwargs))
+        return self._post_request('replace', self.common_datagram_params(url, *args, **kwargs))
 
     def clone(self, url, *args, **kwargs):
-        return self._post_request('clone', self.common_datagram_params(url, **kwargs))
+        return self._post_request('clone', self.common_datagram_params(url, *args, **kwargs))
 
     def execute(self, url, *args, **kwargs):
-        return self._post_request('exec', self.common_datagram_params(url, **kwargs))
+        return self._post_request('exec', self.common_datagram_params(url, *args, **kwargs))
 
     def move(self, url, *args, **kwargs):
         if kwargs:
