@@ -279,6 +279,7 @@ class FortiManager(object):
             params[0]['data'] = data
         return params
 
+    # TODO fix this to use same as add/update/set/delete/replace/clone/execute
     def get(self, url, *args, **kwargs):
         if kwargs:
             data = kwargs
@@ -309,6 +310,7 @@ class FortiManager(object):
     def execute(self, url, *args, **kwargs):
         return self._post_request('exec', self.common_datagram_params(url, *args, **kwargs))
 
+    # TODO fix this to use same as add/update/set/delete/replace/clone/execute
     def move(self, url, *args, **kwargs):
         if kwargs:
             data = kwargs
