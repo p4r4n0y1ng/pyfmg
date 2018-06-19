@@ -271,7 +271,6 @@ class FortiManager(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.logout()
-        return True
 
     @staticmethod
     def common_datagram_params(url, **kwargs):
