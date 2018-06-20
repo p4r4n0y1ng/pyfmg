@@ -50,7 +50,7 @@ fmg_instance.commit_changes("root")
 fmg_instance.unlock_adom("root")
 fmg_instance.logout()
 ```
-The following would perform the same and would also unlock the *root* ADOM on the way out (notice no call to *unlock_adom is required here):
+The following would perform the same and would also unlock the *root* ADOM on the way out (notice no call to *unlock_adom* is required here):
 
 ```
 fmg_instance.lock_adom("root")
@@ -66,7 +66,7 @@ fmg_instance.add('pm/config/adom/{adom}/obj/firewall/address'.format(adom="root"
 ```
 This facility is helpful, but a more obvious way to make these kind of calls with a little more clarity is shown below in the **Tests** section where a standard dictionary is utilized effectively. In that case, the double underscore translations are not needed and dashes will work perfectly fine (see below).
 
-####Exceptions
+###Exceptions
 Exceptions are allowed to propogate up to the caller and are only caught in certain cases where they will be needed in case verbose mode is asked for and the caller wants a print out of the exception. After the print is accomplished that same exception will be raised and propogated so it can be either caught and handled by the caller or used as a debug tool.
 
 ## Motivation
