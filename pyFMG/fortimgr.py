@@ -52,9 +52,6 @@ class FMGLockContext(object):
         else:
             url = "/dvmdb/adom/root/workspace/lock"
         code, respobj = self._fmg.execute(url, {}, *args, **kwargs)
-        print code
-        print respobj
-
         if code == 0 and respobj["status"]["message"].lower() == "ok":
             self.add_adom_to_lock_list(adom)
         return code, respobj
@@ -204,10 +201,10 @@ class FortiManager(object):
             response = requests.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
                                      timeout=self.timeout).json()
         except requests.exceptions.ConnectionError as cerr:
-            self.dprint("Connection error: {err_type} {err}".format(err_type=type(cerr), err=cerr))
+            self.dprint("Connection error: {err_type} {err}\n\n".format(err_type=type(cerr), err=cerr))
             raise
         except Exception as err:
-            self.dprint("Exception: {err_type} {err}".format(err_type=type(err), err=err))
+            self.dprint("Exception: {err_type} {err}\n\n".format(err_type=type(err), err=err))
             raise
         self.dprint("RESPONSE:", response)
         return self._handle_response(response)
