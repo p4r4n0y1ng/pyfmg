@@ -188,7 +188,7 @@ class FortiManager(object):
                 return result["status"]["code"], result
         except Exception as e:
             self.dprint("Response parser error: {err_type} {err}".format(err_type=type(e), err=e))
-            return 1, e
+            raise
 
     def _post_request(self, method, params):
         self._update_request_id()
@@ -205,11 +205,10 @@ class FortiManager(object):
                                      timeout=self.timeout).json()
         except requests.exceptions.ConnectionError as cerr:
             self.dprint("Connection error: {err_type} {err}".format(err_type=type(cerr), err=cerr))
-            return 1, cerr
+            raise
         except Exception as err:
             self.dprint("Exception: {err_type} {err}".format(err_type=type(err), err=err))
-            return 1, err
-        assert response["id"] == json_request["id"]
+            raise
         self.dprint("RESPONSE:", response)
         return self._handle_response(response)
 
