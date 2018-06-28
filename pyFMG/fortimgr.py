@@ -5,9 +5,51 @@ import time
 import logging
 import json
 import requests
+from requests.exceptions import ConnectionError as ReqConnError, ConnectTimeout as ReqConnTimeout
 
 
 log = logging.getLogger("fortimanager")
+
+
+class FMGBaseException(Exception):
+    """Wrapper to catch the unexpected"""
+    def __init__(self, msg=None, *args, **kwargs):
+        if msg is None:
+            msg = "An exception occurred within pyfmg"
+        super(FMGBaseException, self).__init__(msg, *args, **kwargs)
+
+
+class FMGValidSessionException(FMGBaseException):
+    """Raised when a call is made, but there is no valid login instance"""
+    def __init__(self, method, params, *args, **kwargs):
+        msg = "A call using the {method} method was requested to {url} on a FortiManager instance that had no " \
+              "valid session or was not connected. Paramaters were:\n{params}".\
+            format(method=method, url=params[0]["url"], params=params)
+        super(FMGValidSessionException, self).__init__(msg, *args, **kwargs)
+
+
+class FMGValueError(ValueError):
+    """Catch value errors such as bad timeout values"""
+    def __init__(self, *args, **kwargs):
+        super(FMGValueError, self).__init__(*args, **kwargs)
+
+
+class FMGResponseNotFormedCorrect(KeyError):
+    """Used only if a response does not have a standard format as based on FMG response guidelines"""
+    def __init__(self, *args, **kwargs):
+        super(FMGResponseNotFormedCorrect, self).__init__(*args, **kwargs)
+
+
+class FMGConnectionError(ReqConnError):
+    """Wrap requests Connection error so requests is not a dependency outside this module"""
+    def __init__(self, *args, **kwargs):
+        super(FMGConnectionError, self).__init__(*args, **kwargs)
+
+
+class FMGConnectTimeout(ReqConnTimeout):
+    """Wrap requests Connection timeout error so requests is not a dependency outside this module"""
+    def __init__(self, *args, **kwargs):
+        super(FMGConnectTimeout, self).__init__(*args, **kwargs)
 
 
 class FMGLockContext(object):
@@ -36,8 +78,11 @@ class FMGLockContext(object):
     def check_mode(self):
         url = "/cli/global/system/global"
         code, resp_obj = self._fmg.get(url)
-        if resp_obj["workspace-mode"] != 0:
-            self.uses_workspace = True
+        try:
+            if resp_obj["workspace-mode"] != 0:
+                self.uses_workspace = True
+        except KeyError:
+            self.uses_workspace = False
 
     def run_unlock(self):
         for adom_locked in self._locked_adom_list:
@@ -173,21 +218,19 @@ class FortiManager(object):
         return self._lock_ctx.commit_changes(adom, aux, *args, **kwargs)
 
     def _handle_response(self, response):
-        try:
-            self._set_sid(response)
-            if type(response["result"]) is list:
-                result = response["result"][0]
-            else:
-                result = response["result"]
-            if "data" in result:
-                return result["status"]["code"], result["data"]
-            else:
-                return result["status"]["code"], result
-        except Exception as e:
-            self.dprint("Response parser error: {err_type} {err}".format(err_type=type(e), err=e))
-            raise
+        self._set_sid(response)
+        if type(response["result"]) is list:
+            result = response["result"][0]
+        else:
+            result = response["result"]
+        if "data" in result:
+            return result["status"]["code"], result["data"]
+        else:
+            return result["status"]["code"], result
 
-    def _post_request(self, method, params):
+    def _post_request(self, method, params, login=False):
+        if self.sid is None and not login:
+            raise FMGValidSessionException(method, params)
         self._update_request_id()
         headers = {"content-type": "application/json"}
         json_request = {
@@ -200,14 +243,23 @@ class FortiManager(object):
         try:
             response = requests.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
                                      timeout=self.timeout).json()
-        except requests.exceptions.ConnectionError as cerr:
-            self.dprint("Connection error: {err_type} {err}\n\n".format(err_type=type(cerr), err=cerr))
-            raise
+            self.dprint("RESPONSE:", response)
+            return self._handle_response(response)
+        except ReqConnError as err:
+            self.dprint("Connection error: {err_type} {err}\n\n".format(err_type=type(err), err=err))
+            raise FMGConnectionError(err)
+        except ValueError as err:
+            self.dprint("Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err))
+            raise FMGValueError(err)
+        except KeyError as err:
+            self.dprint("Key error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err))
+            raise FMGResponseNotFormedCorrect(err)
+        except IndexError as err:
+            self.dprint("Index error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err))
+            raise FMGResponseNotFormedCorrect(err)
         except Exception as err:
-            self.dprint("Exception: {err_type} {err}\n\n".format(err_type=type(err), err=err))
-            raise
-        self.dprint("RESPONSE:", response)
-        return self._handle_response(response)
+            self.dprint("Response parser error: {err_type} {err}".format(err_type=type(err), err=err))
+            raise FMGBaseException(err)
 
     def track_task(self, task_id, sleep_time=5, retrieval_fail_gate=10, timeout=120):
         begin_task_time = datetime.now()
@@ -249,9 +301,12 @@ class FortiManager(object):
 
     def login(self):
         self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
-        self.execute("sys/login/user", passwd=self._passwd, user=self._user,)
+        self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user,)
         self._lock_ctx.check_mode()
-        return self
+        if self.__str__() == "FortiManager instance connnected to {host}.".format(host=self._host):
+            return 0, {"status": {"message": "OK", "code": 0}, "url": "sys/login/user"}
+        else:
+            return -1, {"status": {"message": self, "code": -1}, "url": "sys/login/user"}
 
     def logout(self):
         if self.sid is not None:
@@ -304,8 +359,8 @@ class FortiManager(object):
     def clone(self, url, *args, **kwargs):
         return self._post_request("clone", self.common_datagram_params("clone", url, *args, **kwargs))
 
-    def execute(self, url, *args, **kwargs):
-        return self._post_request("exec", self.common_datagram_params("execute", url, *args, **kwargs))
+    def execute(self, url, login=False, *args, **kwargs):
+        return self._post_request("exec", self.common_datagram_params("execute", url, *args, **kwargs), login)
 
     def move(self, url, *args, **kwargs):
         return self._post_request("move", self.common_datagram_params("move", url, *args, **kwargs))
