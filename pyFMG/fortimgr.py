@@ -317,7 +317,8 @@ class FortiManager(object):
             return ret_code, response
 
     def __enter__(self):
-        return self.login()
+        self.login()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.logout()
