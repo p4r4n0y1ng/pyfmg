@@ -330,7 +330,8 @@ class FortiManager(object):
             for arg in args:
                 params[0].update(arg)
         if kwargs:
-            for k, _ in kwargs.iteritems():
+            keylist = list(kwargs)
+            for k in keylist:
                 kwargs[k.replace("__", "-")] = kwargs.pop(k)
             if method_type == "get" or method_type == "clone":
                 params[0].update(kwargs)
