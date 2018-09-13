@@ -97,6 +97,38 @@ except FMGBaseException:
 
 Exceptions are allowed to propogate up to the caller and are only caught in certain cases where they will be needed in case verbose mode is asked for and the caller wants a print out of the exception. After the print is accomplished that same exception will be raised and propogated so it can be either caught and handled by the caller or used as a debug tool.
 
+## Special Keywords
+
+This section outlines special keywords that will be used within \*\*kwargs that will mean something significant to pyFMG. These keywords, when used by the caller will be checked and will provided special circumstances to the pyFMG calls as there are quite a few special reqiurements when dealing with the FortiManager.
+
+The *data* keyword - utilizing arrays instead of JSON objects in the params section of the request object.
+
+This case is required when an array of objects is needed vice a JSON object with possibly arrays or other objects inside it. An example of this would be a request that needs to look like the following:
+```
+{
+  "id": 1, 
+  "method": "add", 
+  "params": [
+    {
+      "data": [
+        "membername1", 
+        "membername2"
+      ], 
+      "url": "pm/config/adom/root/obj/firewall/addrgrp/test_addr_group/member"
+    }
+  ], 
+  "session": "BLAH"
+}
+```
+
+Notice that the params attribute is holding a data attribute that is an array of items vice the standard JSON object as normally required. To utilize this functionality, the caller will provide a keyword of *data* in the call with the array of information as its value. The call would look like:
+
+```
+fmg_instance.add("pm/config/adom/root/obj/firewall/addrgrp/test_addr_group/member", data=["membername1", "membername2"])
+```
+
+Any and all keywords past the data keyword will be disregarded.
+
 ## Responses
 
 A standard, response mechanism is provided from this module so calling objects know what to expect back. Unless an exception is thrown, this module will return a 2 object tuple consisting of the code of the response back, followed by the information in the *"data"* attribute within the response. If there's no data attribute in the response, the text of the response is provided. Since login does not provide a constant response from a FMG appliance, one is provided by this module to ensure a caller knows what will be returned and in what format. An example response of a login, get call, and then logout process is below:
