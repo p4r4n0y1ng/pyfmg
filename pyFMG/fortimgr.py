@@ -336,8 +336,10 @@ class FortiManager(object):
             if method_type == "get" or method_type == "clone":
                 params[0].update(kwargs)
             else:
-                data = kwargs
-                params[0]["data"] = data
+                if kwargs.get("data", False):
+                    params[0]["data"] = kwargs["data"]
+                else:
+                    params[0]["data"] = kwargs
         return params
 
     def get(self, url, *args, **kwargs):
