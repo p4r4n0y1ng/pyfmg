@@ -77,7 +77,7 @@ class FMGLockContext(object):
 
     def check_mode(self):
         url = "/cli/global/system/global"
-        code, resp_obj = self._fmg.get(url)
+        code, resp_obj = self._fmg.get(url, fields=["workspace-mode", "adom-mode"])
         try:
             if resp_obj["workspace-mode"] != 0:
                 self.uses_workspace = True
@@ -130,7 +130,7 @@ class FMGLockContext(object):
 
 class FortiManager(object):
 
-    def __init__(self, host, user, passwd, debug=False, use_ssl=True, verify_ssl=False, timeout=300,
+    def __init__(self, host='', user='', passwd='', debug=False, use_ssl=True, verify_ssl=False, timeout=300,
                  disable_request_warnings=False):
         super(FortiManager, self).__init__()
         self._debug = debug
