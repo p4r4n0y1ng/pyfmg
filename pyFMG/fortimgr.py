@@ -128,11 +128,23 @@ class FMGLockContext(object):
         return self._fmg.execute(url, {}, *args, **kwargs)
 
 
-class FortiManager(object):
-
-    def __init__(self, host='', user='', passwd='', debug=False, use_ssl=True, verify_ssl=False, timeout=300,
+# Factory in case we have to add other objects here
+def FortiManager(host="", user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
                  disable_request_warnings=False):
-        super(FortiManager, self).__init__()
+    # host could actually be an instance of FortiManager, in that case, let's assign all that information here
+    # and move on
+    if "FortiManager instance connnected to " in str(host) and user == "" and passwd == "":
+        if hasattr(host, "_sid"):
+            return host
+    else:
+        return FortiManagerObj(host, user, passwd, debug, use_ssl, verify_ssl, timeout, disable_request_warnings)
+
+
+class FortiManagerObj(object):
+
+    def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
+                 disable_request_warnings=False):
+        super(FortiManagerObj, self).__init__()
         self._debug = debug
         self._host = host
         self._user = user
