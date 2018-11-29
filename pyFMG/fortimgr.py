@@ -58,6 +58,7 @@ class FMGLockContext(object):
         self._fmg = fmg
         self._locked_adom_list = list()
         self._uses_workspace = False
+        self._uses_adoms = False
 
     @property
     def uses_workspace(self):
@@ -66,6 +67,14 @@ class FMGLockContext(object):
     @uses_workspace.setter
     def uses_workspace(self, val):
         self._uses_workspace = val
+
+    @property
+    def uses_adoms(self):
+        return self._uses_adoms
+
+    @uses_adoms.setter
+    def uses_adoms(self, val):
+        self._uses_adoms = val
 
     def add_adom_to_lock_list(self, adom):
         if adom not in self._locked_adom_list:
@@ -77,12 +86,17 @@ class FMGLockContext(object):
 
     def check_mode(self):
         url = "/cli/global/system/global"
-        code, resp_obj = self._fmg.get(url, fields=["workspace-mode", "adom-mode"])
+        code, resp_obj = self._fmg.get(url, fields=["workspace-mode", "adom-status"])
         try:
             if resp_obj["workspace-mode"] != 0:
                 self.uses_workspace = True
         except KeyError:
             self.uses_workspace = False
+        try:
+            if resp_obj["adom-status"] == 1:
+                self.uses_adoms = True
+        except KeyError:
+            self.uses_adoms = False
 
     def run_unlock(self):
         for adom_locked in self._locked_adom_list:
@@ -131,12 +145,11 @@ class FMGLockContext(object):
 # Factory in case we have to add other objects here
 def FortiManager(host="", user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
                  disable_request_warnings=False):
-    # host could actually be an instance of FortiManager, in that case, let's assign all that information here
-    # and move on
+    # host could actually be an instance of FortiManager, in that case, let's just return that valid object
     if "FortiManager instance connnected to " in str(host) and user == "" and passwd == "":
         if hasattr(host, "_sid"):
             return host
-    else:
+    elif host != "":
         return FortiManagerObj(host, user, passwd, debug, use_ssl, verify_ssl, timeout, disable_request_warnings)
 
 
