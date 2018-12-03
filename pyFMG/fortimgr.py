@@ -320,6 +320,7 @@ class FortiManagerObj(object):
                 else:
                     time.sleep(sleep_time)
         end_task_time = datetime.now()
+        task_info["total_task_time"] = str(end_task_time - begin_task_time)
         self.dprint("Task completion is at {time}".format(time=str(end_task_time)))
         self.dprint("Total time to complete is {time}".format(time=str(end_task_time-begin_task_time)))
         return code, task_info
