@@ -7,49 +7,61 @@ import json
 import requests
 from requests.exceptions import ConnectionError as ReqConnError, ConnectTimeout as ReqConnTimeout
 
-
 log = logging.getLogger("fortimanager")
 
 
 class FMGBaseException(Exception):
     """Wrapper to catch the unexpected"""
+
     def __init__(self, msg=None, *args, **kwargs):
         if msg is None:
             msg = "An exception occurred within pyfmg"
-        super(FMGBaseException, self).__init__(msg, *args, **kwargs)
+        super(FMGBaseException, self).__init__(msg, *args)
 
 
 class FMGValidSessionException(FMGBaseException):
     """Raised when a call is made, but there is no valid login instance"""
+
     def __init__(self, method, params, *args, **kwargs):
         msg = "A call using the {method} method was requested to {url} on a FortiManager instance that had no " \
-              "valid session or was not connected. Paramaters were:\n{params}".\
+              "valid session or was not connected. Paramaters were:\n{params}". \
             format(method=method, url=params[0]["url"], params=params)
         super(FMGValidSessionException, self).__init__(msg, *args, **kwargs)
 
 
 class FMGValueError(ValueError):
     """Catch value errors such as bad timeout values"""
-    def __init__(self, *args, **kwargs):
-        super(FMGValueError, self).__init__(*args, **kwargs)
+
+    def __init__(self, *args):
+        super(FMGValueError, self).__init__(*args)
 
 
 class FMGResponseNotFormedCorrect(KeyError):
     """Used only if a response does not have a standard format as based on FMG response guidelines"""
-    def __init__(self, *args, **kwargs):
-        super(FMGResponseNotFormedCorrect, self).__init__(*args, **kwargs)
+
+    def __init__(self, *args):
+        super(FMGResponseNotFormedCorrect, self).__init__(*args)
 
 
 class FMGConnectionError(ReqConnError):
     """Wrap requests Connection error so requests is not a dependency outside this module"""
+
     def __init__(self, *args, **kwargs):
         super(FMGConnectionError, self).__init__(*args, **kwargs)
 
 
 class FMGConnectTimeout(ReqConnTimeout):
     """Wrap requests Connection timeout error so requests is not a dependency outside this module"""
+
     def __init__(self, *args, **kwargs):
         super(FMGConnectTimeout, self).__init__(*args, **kwargs)
+
+
+class FMGRequestNotFormedCorrect(FMGBaseException):
+    """Used only if a request does not have a standard format as based on FMG request guidelines"""
+
+    def __init__(self, msg=None, *args, **kwargs):
+        super(FMGRequestNotFormedCorrect, self).__init__(msg=msg, *args, **kwargs)
 
 
 class FMGLockContext(object):
@@ -142,22 +154,11 @@ class FMGLockContext(object):
         return self._fmg.execute(url, {}, *args, **kwargs)
 
 
-# Factory in case we have to add other objects here
-def FortiManager(host="", user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 disable_request_warnings=False):
-    # host could actually be an instance of FortiManager, in that case, let's just return that valid object
-    if "FortiManager instance connnected to " in str(host) and user == "" and passwd == "":
-        if hasattr(host, "_sid"):
-            return host
-    elif host != "":
-        return FortiManagerObj(host, user, passwd, debug, use_ssl, verify_ssl, timeout, disable_request_warnings)
-
-
-class FortiManagerObj(object):
+class FortiManager(object):
 
     def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
                  disable_request_warnings=False):
-        super(FortiManagerObj, self).__init__()
+        super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
         self._user = user
@@ -253,7 +254,7 @@ class FortiManagerObj(object):
         else:
             return result["status"]["code"], result
 
-    def _post_request(self, method, params, login=False):
+    def _post_request(self, method, params, login=False, free_form=False):
         if self.sid is None and not login:
             raise FMGValidSessionException(method, params)
         self._update_request_id()
@@ -269,7 +270,10 @@ class FortiManagerObj(object):
             response = requests.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
                                      timeout=self.timeout).json()
             self.dprint("RESPONSE:", response)
-            return self._handle_response(response)
+            if free_form:
+                return 0, response
+            else:
+                return self._handle_response(response)
         except ReqConnError as err:
             self.dprint("Connection error: {err_type} {err}\n\n".format(err_type=type(err), err=err))
             raise FMGConnectionError(err)
@@ -322,12 +326,12 @@ class FortiManagerObj(object):
         end_task_time = datetime.now()
         task_info["total_task_time"] = str(end_task_time - begin_task_time)
         self.dprint("Task completion is at {time}".format(time=str(end_task_time)))
-        self.dprint("Total time to complete is {time}".format(time=str(end_task_time-begin_task_time)))
+        self.dprint("Total time to complete is {time}".format(time=str(end_task_time - begin_task_time)))
         return code, task_info
 
     def login(self):
         self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
-        self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user,)
+        self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user, )
         self._lock_ctx.check_mode()
         if self.__str__() == "FortiManager instance connnected to {host}.".format(host=self._host):
             return 0, {"status": {"message": "OK", "code": 0}, "url": "sys/login/user"}
@@ -394,6 +398,16 @@ class FortiManagerObj(object):
 
     def move(self, url, *args, **kwargs):
         return self._post_request("move", self.common_datagram_params("move", url, *args, **kwargs))
+
+    def free_form(self, method, **kwargs):
+        if kwargs:
+            if kwargs.get("data", False):
+                return self._post_request(method, kwargs["data"], free_form=True)
+            else:
+                raise FMGRequestNotFormedCorrect("Free Form Request was not formed correctly. A data key is required")
+        else:
+            raise FMGRequestNotFormedCorrect("Free Form Request was not formed correctly. A dictionary object with a "
+                                             "data key is required")
 
     def __str__(self):
         if self.sid is not None:
