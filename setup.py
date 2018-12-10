@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='pyfmg',
-    version='0.8.01',
+    version='0.8.1',
     packages=find_packages(),
     url='https://github.com/p4r4n0y1ng/pyfmg',
     license='Apache 2.0',
