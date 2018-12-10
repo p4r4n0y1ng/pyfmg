@@ -75,7 +75,8 @@ The module provides the following exceptions for use:
 3. FMGValueError(ValueError)
 4. FMGResponseNotFormedCorrect(KeyError)
 5. FMGConnectionError(ReqConnError)
-6. FMGConnectTimeout(ReqConnTimeout):
+6. FMGConnectTimeout(ReqConnTimeout)
+7. FMGRequestNotFormedCorrect(FMGBaseException)
 
 **FMGBaseException** is the Base exception for the module and can be used to catch all things outside of the ValueError and Keyerror issues.
 
@@ -93,7 +94,9 @@ except FMGBaseException:
 
 **FMGResponseNotFormedCorrect** will be raised when response received back from the FMG instance does not have a *result*, *status*, or *code* attribute. FMG responses without these attributes are ill-formed and will raise this error. The only exception to this is the response from a valid *login()* call. This exception is suppressed for this, and a valid response is crafted for login to ensure a stable, standard, and constant response back from the module.
 
-**FMGConnectionError** and **FMGConnectTimeout** are raised when a *requests.exception.ConnectionError* or *requests.exceptions.ConnectTimeout* exception is caught. This ensures calling code does not need to import/depend on the requests module to handle requests connection exceptions. *FMGConnectionError* will most likely be thrown at *login()* and are likely due to an incorrect hostname, or IP Address of the FMG appliance.  
+**FMGConnectionError** and **FMGConnectTimeout** are raised when a *requests.exception.ConnectionError* or *requests.exceptions.ConnectTimeout* exception is caught. This ensures calling code does not need to import/depend on the requests module to handle requests connection exceptions. *FMGConnectionError* will most likely be thrown at *login()* and are likely due to an incorrect hostname, or IP Address of the FMG appliance.
+
+**FMGRequestNotFormedCorrect** will be raised when a request for free form capability is issued and the request format is not correct. Specifically a *data* keyword is required to be passed in and the value must be a dictionary. See the ```free_form()``` method explanation below
 
 Exceptions are allowed to propogate up to the caller and are only caught in certain cases where they will be needed in case verbose mode is asked for and the caller wants a print out of the exception. After the print is accomplished that same exception will be raised and propogated so it can be either caught and handled by the caller or used as a debug tool.
 
@@ -140,6 +143,31 @@ A standard, response mechanism is provided from this module so calling objects k
 ``` 
 
 Notice the the login response (the first response above) is NOT unicode. Other than that it matches exactly with other call responses.
+
+## Special Functions
+
+When an operation is sent to the FMG that in return kicks off a task on the sytem (i.e. device config installation, policy package push, etc...) the return value is as discussed where a tuple with the return code and the return json value is provided. In this case, the JSON value will have a task identifier attribute and can be used to track that task. This module provides a simple track tasking functionality called ```track_task()``` that takes in a *task_id* integer and then optional values for *sleep_time* (default is 5 seconds) between requests, *retrieval_fail_gate* (default is 10) and a *timeout* (default is 120). This provides a looped response for that task that with the defaults allows for the system to take approx a minute to respond - this value is a very long time, so we are certain that if the system does not respond by then something is wrong. The loop requests information from the system about the task every 5 seconds and give the system over 2 minutes to complete prior to giving a response that the task is taking too long. This function allows the capability of getting a task and then watching the values - as well as pivoting off of the rich data the FMG responds with to include number of lines that were completed, any errors or warnings, completion time and more. The system also adds in an attribute to the response data on the completion cycle named **total_task_time** which is the time it took for the task to complete its actions. A way to call and use this function is as follows:
+
+```
+code, task_obj = fmg_instance.execute("securityconsole/install/package", flags=["preview"], adom="root", pkg=pp_name)
+if 'task' in task_obj:
+    taskid = task_obj.get('task')
+    fmg_instance.track_task(taskid)
+```
+
+An execution function outside of the standard *get*, *add*, *update*, *delete*, *set*, *replace*, *clone*, *execute*, or *move* has been added. This function is called ```free_form(method, **kwargs)```. The arguments are the string method that must be called such as *add* or *get*, etc... and a key word argument list. The kw argument must be a dictionary that has the key **data** or a *FMGRequestNotFormedCorrect* exception will be raised. This data keyword must have the exact value you want to send to the FMG. This function is used for when either the FMG Request object is slightly different than standard OR you are trying to call the FMG with multiple operations. For instance, you want to add 3 address objects with one call. In order to do something like this, the ```free_form()``` function is used and called as below where we are requesting all data from policy id's 1, 3, 4, 5, and 7 with one call:
+
+```
+multi_data = []
+for pol_id in [1, 3, 4, 5, 7]:
+    multi_data.append({
+            "url": f"/pm/config/adom/root/pkg/default/firewall/policy",
+            "fields": ["policyid", "name"],
+          })
+
+if len(multi_data) > 0:
+    code, res = fmg_instance.free_form("get", data=multi_data)
+``` 
 
 ## Motivation
 
