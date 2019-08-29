@@ -254,17 +254,23 @@ class FortiManager(object):
         else:
             return result["status"]["code"], result
 
-    def _post_request(self, method, params, login=False, free_form=False):
+    def _post_request(self, method, params, login=False, free_form=False, create_task=None):
         if self.sid is None and not login:
             raise FMGValidSessionException(method, params)
         self._update_request_id()
         headers = {"content-type": "application/json"}
-        json_request = {
-            "method": method,
-            "params": params,
-            "session": self.sid,
-            "id": self.req_id,
-        }
+        json_request = {}
+        if create_task:
+            json_request["create task"] = create_task
+            json_request["method"] = method
+            json_request["params"] = params
+            json_request["session"] = self.sid
+            json_request["id"] = self.req_id
+        else:
+            json_request["method"] = method
+            json_request["params"] = params
+            json_request["session"] = self.sid
+            json_request["id"] = self.req_id
         self.dprint("REQUEST:", json_request)
         try:
             response = requests.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
@@ -362,7 +368,7 @@ class FortiManager(object):
         if kwargs:
             keylist = list(kwargs)
             for k in keylist:
-                kwargs[k.replace("__", "-")] = kwargs.pop(k)
+                kwargs[k.replace("___", " ").replace("__", "-")] = kwargs.pop(k)
             if method_type == "get" or method_type == "clone":
                 params[0].update(kwargs)
             else:
@@ -399,10 +405,10 @@ class FortiManager(object):
     def move(self, url, *args, **kwargs):
         return self._post_request("move", self.common_datagram_params("move", url, *args, **kwargs))
 
-    def free_form(self, method, **kwargs):
+    def free_form(self, method, create_task=None, **kwargs):
         if kwargs:
             if kwargs.get("data", False):
-                return self._post_request(method, kwargs["data"], free_form=True)
+                return self._post_request(method, kwargs["data"], free_form=True, create_task=create_task)
             else:
                 raise FMGRequestNotFormedCorrect("Free Form Request was not formed correctly. A data key is required")
         else:
