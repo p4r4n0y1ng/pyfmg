@@ -170,6 +170,7 @@ class FortiManager(object):
         self._sid = None
         self._url = None
         self._lock_ctx = FMGLockContext(self)
+        self._socket = requests.session()
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -215,6 +216,10 @@ class FortiManager(object):
     @timeout.setter
     def timeout(self, val):
         self._timeout = val
+
+    @property
+    def sock(self):
+        return self._socket
 
     @staticmethod
     def jprint(json_obj):
@@ -273,8 +278,8 @@ class FortiManager(object):
             json_request["id"] = self.req_id
         self.dprint("REQUEST:", json_request)
         try:
-            response = requests.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
-                                     timeout=self.timeout).json()
+            response = self.sock.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
+                                      timeout=self.timeout).json()
             self.dprint("RESPONSE:", response)
             if free_form:
                 return 0, response
