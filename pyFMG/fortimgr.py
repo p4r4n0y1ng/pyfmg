@@ -410,6 +410,9 @@ class FortiManager(object):
     def move(self, url, *args, **kwargs):
         return self._post_request("move", self.common_datagram_params("move", url, *args, **kwargs))
 
+    def unset(self, url, *args, **kwargs):
+        return self._post_request("unset", self.common_datagram_params("unset", url, *args, **kwargs))
+
     def free_form(self, method, create_task=None, **kwargs):
         if kwargs:
             if kwargs.get("data", False):
