@@ -154,6 +154,59 @@ class FMGLockContext(object):
         return self._fmg.execute(url, {}, *args, **kwargs)
 
 
+class RequestResponse(object):
+    """Simple wrapper around the request response object so debugging and logging can be done with simplicity"""
+
+    def __init__(self):
+        self._request_string = "REQUEST:"
+        self._response_string = "RESPONSE:"
+        self._request_json = None
+        self._response_json = None
+        self._error_msg = None
+
+    def reset(self):
+        self._request_string = "REQUEST:"
+        self.error_msg = None
+        self.response_json = None
+        self.request_json = None
+
+    @property
+    def request_string(self):
+        return self._request_string
+
+    @request_string.setter
+    def request_string(self, val):
+        self._request_string = val
+
+    @property
+    def response_string(self):
+        return self._response_string
+
+    @property
+    def request_json(self):
+        return self._request_json
+
+    @request_json.setter
+    def request_json(self, val):
+        self._request_json = val
+
+    @property
+    def response_json(self):
+        return self._response_json
+
+    @response_json.setter
+    def response_json(self, val):
+        self._response_json = val
+
+    @property
+    def error_msg(self):
+        return self._error_msg
+
+    @error_msg.setter
+    def error_msg(self, val):
+        self._error_msg = val
+
+
 class FortiManager(object):
 
     def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
@@ -170,7 +223,8 @@ class FortiManager(object):
         self._sid = None
         self._url = None
         self._lock_ctx = FMGLockContext(self)
-        self._socket = requests.session()
+        self._session = requests.session()
+        self._req_resp_object = RequestResponse()
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -218,8 +272,12 @@ class FortiManager(object):
         self._timeout = val
 
     @property
-    def sock(self):
-        return self._socket
+    def sess(self):
+        return self._session
+
+    @property
+    def req_resp_object(self):
+        return self._req_resp_object
 
     @staticmethod
     def jprint(json_obj):
@@ -228,12 +286,20 @@ class FortiManager(object):
         except TypeError as te:
             return json.dumps({"Type Information": te.message})
 
-    def dprint(self, msg, s=None):
-        if self.debug:
-            print(msg)
-            if s is not None:
-                print(self.jprint(s) + "\n")
-        pass
+    def dprint(self):
+        if not self.debug:
+            return
+        if self.req_resp_object.error_msg is not None:
+            print(self.req_resp_object.error_msg)
+            return
+        print("-" * 100 + "\n")
+        print(self.req_resp_object.request_string)
+        if self.req_resp_object.request_json is not None:
+            print(self.jprint(self.req_resp_object.request_json))
+        print("\n" + self.req_resp_object.response_string)
+        if self.req_resp_object.response_json is not None:
+            print(self.jprint(self.req_resp_object.response_json))
+        print("\n" + "-" * 100 + "\n")
 
     def _set_sid(self, response):
         if self.sid is None and "session" in response:
@@ -248,8 +314,16 @@ class FortiManager(object):
     def commit_changes(self, adom=None, aux=False, *args, **kwargs):
         return self._lock_ctx.commit_changes(adom, aux, *args, **kwargs)
 
-    def _handle_response(self, response):
+    def _handle_response(self, resp):
+        try:
+            response = resp.json()
+        except:
+            # response is not able to be decoded into json return 100 as a code and the entire response object
+            return 100, resp
+
         self._set_sid(response)
+        self.req_resp_object.response_json = response
+        self.dprint()
         if type(response["result"]) is list:
             result = response["result"][0]
         else:
@@ -260,6 +334,8 @@ class FortiManager(object):
             return result["status"]["code"], result
 
     def _post_request(self, method, params, login=False, free_form=False, create_task=None):
+        self.req_resp_object.reset()
+
         if self.sid is None and not login:
             raise FMGValidSessionException(method, params)
         self._update_request_id()
@@ -276,35 +352,51 @@ class FortiManager(object):
             json_request["params"] = params
             json_request["session"] = self.sid
             json_request["id"] = self.req_id
-        self.dprint("REQUEST:", json_request)
+        self.req_resp_object.request_json = json_request
         try:
-            response = self.sock.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
-                                      timeout=self.timeout).json()
-            self.dprint("RESPONSE:", response)
+            response = self.sess.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
+                                      timeout=self.timeout)
             if free_form:
-                return 0, response
+                try:
+                    res = response.json()
+                    return 0, res
+                except:
+                    # response is not able to be decoded into json return 100 as a code and the entire response object
+                    return 100, response
             else:
                 return self._handle_response(response)
         except ReqConnError as err:
-            self.dprint("Connection error: {err_type} {err}\n\n".format(err_type=type(err), err=err))
-            raise FMGConnectionError(err)
+            msg = "Connection error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGConnectionError(msg)
         except ValueError as err:
-            self.dprint("Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err))
-            raise FMGValueError(err)
+            msg = "Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGValueError(msg)
         except KeyError as err:
-            self.dprint("Key error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err))
-            raise FMGResponseNotFormedCorrect(err)
+            msg = "Key error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGResponseNotFormedCorrect(msg)
         except IndexError as err:
-            self.dprint("Index error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err))
-            raise FMGResponseNotFormedCorrect(err)
+            msg = "Index error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGResponseNotFormedCorrect(msg)
         except Exception as err:
-            self.dprint("Response parser error: {err_type} {err}".format(err_type=type(err), err=err))
-            raise FMGBaseException(err)
+            msg = "Response parser error: {err_type} {err}".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGBaseException(msg)
 
     def track_task(self, task_id, sleep_time=5, retrieval_fail_gate=10, timeout=120):
+        self.req_resp_object.reset()
         begin_task_time = datetime.now()
         start = time.time()
-        self.dprint("Task begins at {time}".format(time=str(begin_task_time)))
+        self.req_resp_object.error_msg = "Task begins at {time}".format(time=str(begin_task_time))
+        self.dprint()
         percent = 0
         code_fail = 0
         code = 1
@@ -316,28 +408,35 @@ class FortiManager(object):
                 num_done = int(task_info["num_done"])
                 num_err = int(task_info["num_err"])
                 num_lines = int(task_info["num_lines"])
-                self.dprint("At timestamp {timestamp}:\nTask {taskid} is at {percent}% completion.\n{num_err} "
-                            "tasks have returned an error.".format(timestamp=datetime.now(),
-                                                                   taskid=str(task_id), percent=str(percent),
-                                                                   num_done=str(num_done), num_lines=str(num_lines),
-                                                                   num_err=str(num_err)), task_info)
+                self.req_resp_object.task_msg = "At timestamp {timestamp}:\nTask {taskid} is at {percent}% " \
+                                                "completion.\n{num_err} tasks have returned an error.".\
+                    format(timestamp=datetime.now(), taskid=str(task_id), percent=str(percent),
+                           num_done=str(num_done), num_lines=str(num_lines), num_err=str(num_err))
+                self.dprint()
             else:
                 code_fail += 1
             if code_fail == retrieval_fail_gate:
-                self.dprint("Task info retrieval failed over {fail_gate} times. Something has caused issues "
-                            "with task {taskid}.".format(taskid=task_id, fail_gate=retrieval_fail_gate))
+                self.req_resp_object.error_msg = "Task info retrieval failed over {fail_gate} times. Something has " \
+                                                 "caused issues with task {taskid}.".\
+                    format(taskid=task_id, fail_gate=retrieval_fail_gate)
+                self.dprint()
                 return code, task_info
             if percent != 100:
                 if time.time() - start >= timeout:
-                    self.dprint("Task did not complete in efficient time. The timeout value was {}".format(timeout))
-                    return 1, {"msg": "Task did not complete in efficient time. "
-                                      "The timeout value was {}".format(timeout)}
+                    msg = "Task did not complete in efficient time. The timeout value was {}".format(timeout)
+                    self.req_resp_object.error_msg = msg
+                    self.dprint()
+                    return 1, {"msg": msg}
                 else:
                     time.sleep(sleep_time)
+        self.req_resp_object.reset()
         end_task_time = datetime.now()
         task_info["total_task_time"] = str(end_task_time - begin_task_time)
-        self.dprint("Task completion is at {time}".format(time=str(end_task_time)))
-        self.dprint("Total time to complete is {time}".format(time=str(end_task_time - begin_task_time)))
+        self.req_resp_object.error_msg = "Task completion is at {time}".format(time=str(end_task_time))
+        self.dprint()
+        self.req_resp_object.error_msg = "Total time to complete is {time}".\
+            format(time=str(end_task_time - begin_task_time))
+        self.dprint()
         return code, task_info
 
     def login(self):
