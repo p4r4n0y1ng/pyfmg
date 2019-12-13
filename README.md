@@ -64,7 +64,14 @@ While this module is meant to be utilized with another caller-written abstractio
 ```
 fmg_instance.add('pm/config/adom/{adom}/obj/firewall/address'.format(adom="root"), allow__routing=0, associated__interface='any', name='add_obj_name', subnet=["192.168.1.0", "255.255.255.0"], type=0, comment='API address obj addition')
 ```
-This facility is helpful, but a more obvious way to make these kind of calls with a little more clarity is shown below in the **Tests** section where a standard dictionary is utilized effectively. In that case, the double underscore translations are not needed and dashes will work perfectly fine (see below).
+
+Another addition to this concept has been added which is when FortiManager requires an attribute with a space between two words. Since this is not allowed, a facility has been added such that a keyword with a triple underscore **___** is automatically translated into a blank space when the keyword/value pair is put into the body of the call. An example follows (notice the triple underscores in the keyword items, these will be translated to spaces when the call is made):
+
+```
+fmg_instance.add('pm/config/adom/{adom}/obj/firewall/address'.format(adom="root"), fake___attribute='any', name='add_obj_name', subnet=["192.168.1.0", "255.255.255.0"], type=0, comment='API address obj addition')
+```
+
+These facilities are helpful, but a more obvious way to make these kind of calls with a little more clarity is shown below in the **Tests** section where a standard dictionary is utilized effectively. In that case, the double underscore translations are not needed and dashes will work perfectly fine (see below). The same holds true for spaces within an attribute when using the free-form method.
 
 ## Exceptions
 
@@ -168,6 +175,35 @@ for pol_id in [1, 3, 4, 5, 7]:
 if len(multi_data) > 0:
     code, res = fmg_instance.free_form("get", data=multi_data)
 ``` 
+
+## Logging
+
+A logging functionality has been provided to enable logging to different handlers as required by the caller using the standard python logging facility. The capability to start logging is simply by calling the *getLog* function. This function returns the internal logging reference held by the FortiGate instance. To add or remove a handler use the associated *addHandler()* or *removeHandler()* functions providing a FileHandler or StreamHandler etc... object. The signature for the *getLog()* function is:
+
+```
+def getLog(self, loggername="fortinet", lvl=logging.INFO)
+``` 
+
+Once a logger is created by calling the *getLog* function, the logger will log the debug information to whatever handler was provided to the *addHandler()* function. If more than one handler is added, more than one log will occur. To stop logging simply use the *resetLog()* function and the Logging object will be set to None. An example of how to log all debug output to a file would be:
+
+```
+fmg.getLog(loggername="fmg")
+fh = logging.FileHandler("/location/to/log/fil.log")
+fh.setLevel(logging.INFO)
+fh.setFormatter(logging.Formatter("%(asctime)s - %(name)s: %(message)s ", "%m/%d/%Y %I:%M:%S %p"))
+fgt.addHandler(fh)
+```
+
+An external module can utilize standard logging functionality to provide a subordinate type logging function using the same handlers as provided to the pyFGT module. For instance, to log to the same location as the pyFGT module logs Handler is set, you would simply have to do the following:
+
+```
+fmg_logger = logging.getLogger("fmg.drvr")
+
+# somewhere in the module
+fmg_logger.log(logging.INFO, "This is a log message)
+```
+
+The log output in this case would have the fgt.drvr moniker in the format header due to the use of the *%(name)s* format string shown above.
 
 ## Motivation
 

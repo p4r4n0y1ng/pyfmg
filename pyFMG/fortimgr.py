@@ -7,8 +7,6 @@ import json
 import requests
 from requests.exceptions import ConnectionError as ReqConnError, ConnectTimeout as ReqConnTimeout
 
-log = logging.getLogger("fortimanager")
-
 
 class FMGBaseException(Exception):
     """Wrapper to catch the unexpected"""
@@ -225,6 +223,7 @@ class FortiManager(object):
         self._lock_ctx = FMGLockContext(self)
         self._session = requests.session()
         self._req_resp_object = RequestResponse()
+        self._logger = None
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -279,6 +278,25 @@ class FortiManager(object):
     def req_resp_object(self):
         return self._req_resp_object
 
+    def getLog(self, loggername="fortinet", lvl=logging.INFO):
+        if self._logger is not None:
+            return self._logger
+        else:
+            self._logger = logging.getLogger(loggername)
+            self._logger.setLevel(lvl)
+            return self._logger
+
+    def resetLog(self):
+        self._logger = None
+
+    def addHandler(self, handler):
+        if self._logger is not None:
+            self._logger.addHandler(handler)
+
+    def removeHandler(self, handler):
+        if self._logger is not None:
+            self._logger.removeHandler(handler)
+
     @staticmethod
     def jprint(json_obj):
         try:
@@ -286,7 +304,20 @@ class FortiManager(object):
         except TypeError as te:
             return json.dumps({"Type Information": te.message})
 
+    def dlog(self):
+        if self._logger is not None:
+            if self.req_resp_object.error_msg is not None:
+                self._logger.log(logging.INFO, self.req_resp_object.error_msg)
+                return
+            self._logger.log(logging.INFO, self.req_resp_object.request_string)
+            if self.req_resp_object.request_json is not None:
+                self._logger.log(logging.INFO, self.jprint(self.req_resp_object.request_json))
+            self._logger.log(logging.INFO, self.req_resp_object.response_string)
+            if self.req_resp_object.response_json is not None:
+                self._logger.log(logging.INFO, self.jprint(self.req_resp_object.response_json))
+
     def dprint(self):
+        self.dlog()
         if not self.debug:
             return
         if self.req_resp_object.error_msg is not None:
