@@ -390,7 +390,7 @@ class FortiManager(object):
             if free_form:
                 try:
                     res = response.json()
-                    return 0, res
+                    return self._handle_response(response)
                 except:
                     # response is not able to be decoded into json return 100 as a code and the entire response object
                     return 100, response
