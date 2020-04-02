@@ -391,7 +391,7 @@ class FortiManager(object):
             json_request["method"] = method
             json_request["params"] = params
             if self._verbose:
-                params[0].update({"verbose": "True"})
+                json_request["verbose"] = self._verbose
             json_request["session"] = self.sid
             json_request["id"] = self.req_id
         self.req_resp_object.request_json = json_request
