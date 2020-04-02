@@ -507,7 +507,7 @@ class FortiManager(object):
     def common_datagram_params(method_type, url, *args, **kwargs):
         params = [{"url": url}]
         if self._verbose:
-            params[0].update("verbose": "True")
+            params[0].update({"verbose": "True"})
         if args:
             for arg in args:
                 params[0].update(arg)
