@@ -208,7 +208,7 @@ class RequestResponse(object):
 class FortiManager(object):
 
     def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 disable_request_warnings=False):
+                 verbose=False, disable_request_warnings=False):
         super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
@@ -217,6 +217,7 @@ class FortiManager(object):
         self._use_ssl = use_ssl
         self._verify_ssl = verify_ssl
         self._timeout = timeout
+        self._verbose = verbose
         self._req_id = 0
         self._sid = None
         self._url = None
@@ -269,6 +270,14 @@ class FortiManager(object):
     @timeout.setter
     def timeout(self, val):
         self._timeout = val
+
+    @property
+    def verbose(self):
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, val):
+        self._verbose = val
 
     @property
     def sess(self):
@@ -497,6 +506,8 @@ class FortiManager(object):
     @staticmethod
     def common_datagram_params(method_type, url, *args, **kwargs):
         params = [{"url": url}]
+        if self._verbose:
+            params[0].update("verbose": "True")
         if args:
             for arg in args:
                 params[0].update(arg)
