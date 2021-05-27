@@ -401,18 +401,8 @@ class FortiManager(object):
             msg = "Connection error: {​err_type}​ {​err}​\n\n".format(err_type=type(err), err=err)
             self.req_resp_object.error_msg = msg
             self.dprint()
-            if "RemoteDisconnected" in msg:
-                self.logger.critical("Connection Error: {​}​".format(err)) 
-                return (False, {"result": {
-                                    "status": {
-                                        "code": 1,
-                                        "message": f"{err}"
-                                                }
-                                            }
-                                }
-                        )
-            else:
-                raise FMGConnectionError(msg)
+            self.logger.critical("Connection Error: {​}​".format(err)) 
+            return (False, {})
         except ValueError as err:
             msg = "Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
             self.req_resp_object.error_msg = msg
