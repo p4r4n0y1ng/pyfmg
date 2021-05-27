@@ -409,7 +409,7 @@ class FortiManager(object):
                 return self._handle_response(response)
         
         except ReqConnError as err:
-            return (False, {})
+            return (-99, {})
         except ValueError as err:
             msg = "Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
             self.req_resp_object.error_msg = msg
@@ -443,7 +443,11 @@ class FortiManager(object):
         task_info = ""
         while percent != 100:
             code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
-            if code == 0:
+            print(code, task_info)
+            if code == -99:
+                print("RemoteDisconnect Issue occured here" + datetime().now)
+                code_fail += 1
+            elif code == 0:
                 percent = int(task_info["percent"])
                 num_done = int(task_info["num_done"])
                 num_err = int(task_info["num_err"])
