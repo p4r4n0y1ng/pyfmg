@@ -445,7 +445,7 @@ class FortiManager(object):
             code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
             print(code, task_info)
             if code == -99:
-                print("RemoteDisconnect Issue occured here" + datetime().now)
+                print("RemoteDisconnect Issue occured here" + datetime.now())
                 code_fail += 1
             elif code == 0:
                 percent = int(task_info["percent"])
