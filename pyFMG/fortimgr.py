@@ -409,10 +409,6 @@ class FortiManager(object):
                 return self._handle_response(response)
         
         except ReqConnError as err:
-            msg = "Connection error: {​err_type}​ {​err}​\n\n".format(err_type=type(err), err=err)
-            
-            self.req_resp_object.error_msg = msg
-            self.dprint()
             self.logger.critical("Connection Error: {​}​".format(err)) 
             return (False, {})
         except ValueError as err:
