@@ -167,7 +167,7 @@ An execution function outside of the standard *get*, *add*, *update*, *delete*, 
 multi_data = []
 for pol_id in [1, 3, 4, 5, 7]:
     multi_data.append({
-            "url": f"/pm/config/adom/root/pkg/default/firewall/policy",
+            "url": f"/pm/config/adom/root/pkg/default/firewall/policy/{pol_id}",
             "fields": ["policyid", "name"],
           })
 
