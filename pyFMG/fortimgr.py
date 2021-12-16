@@ -373,6 +373,23 @@ class FortiManager(object):
         else:
             return result["status"]["code"], result
 
+    def _freeform_response(self, resp):
+        try:
+            response = resp.json()
+        except:
+            # response is not able to be decoded into json return 100 as a code and the entire response object
+            return 100, resp
+
+        self._set_sid(response)
+        self.req_resp_object.response_json = response
+        self.dprint()
+        if type(response["result"]) is list:
+            result = response["result"]
+        else:
+            result = response["result"]
+        # Return the full result data set along with 200 as the response code
+        return 200, result
+
     def _post_request(self, method, params, login=False, free_form=False, create_task=None):
         self.req_resp_object.reset()
 
@@ -401,7 +418,7 @@ class FortiManager(object):
             if free_form:
                 try:
                     res = response.json()
-                    return self._handle_response(response)
+                    return self._freeform_response(response)
                 except:
                     # response is not able to be decoded into json return 100 as a code and the entire response object
                     return 100, response
