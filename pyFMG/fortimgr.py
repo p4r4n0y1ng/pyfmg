@@ -416,12 +416,8 @@ class FortiManager(object):
             response = self.sess.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
                                       timeout=self.timeout)
             if free_form:
-                try:
-                    res = response.json()
-                    return self._freeform_response(response)
-                except:
-                    # response is not able to be decoded into json return 100 as a code and the entire response object
-                    return 100, response
+                # If free_from is set then process using custom response handler
+                return self._freeform_response(response)
             else:
                 return self._handle_response(response)
         except ReqConnError as err:
