@@ -383,10 +383,11 @@ class FortiManager(object):
         self._set_sid(response)
         self.req_resp_object.response_json = response
         self.dprint()
-        if type(response["result"]) is list:
-            result = response["result"]
-        else:
-            result = response["result"]
+
+        # Result is always a list and with free form will include an entry for each URL requested
+        # in the POST request. Setting result to the full result portion of the reponse
+        result = response["result"]
+        
         # Return the full result data set along with 200 as the response code
         return 200, result
 
