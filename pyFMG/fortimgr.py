@@ -387,7 +387,7 @@ class FortiManager(object):
         # Result is always a list and with free form will include an entry for each URL requested
         # in the POST request. Setting result to the full result portion of the reponse
         result = response["result"]
-        
+
         # Return the full result data set along with 200 as the response code
         return 200, result
 
@@ -447,7 +447,7 @@ class FortiManager(object):
             self.dprint()
             raise FMGBaseException(msg)
 
-    def track_task(self, task_id, sleep_time=5, retrieval_fail_gate=10, timeout=120):
+    def track_task(self, task_id, sleep_time=3, retrieval_fail_gate=10, timeout=120):
         self.req_resp_object.reset()
         begin_task_time = datetime.now()
         start = time.time()
@@ -458,7 +458,15 @@ class FortiManager(object):
         code = 1
         task_info = ""
         while percent != 100:
-            code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
+            try:
+                code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
+            except FMGConnectionError:
+                # Set code value to -99 to ensure any future logic is skipped in this failure loop
+                code == -99
+                self.req_resp_object.task_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
+                    "{timestamp}".format(timestamp=datetime.now())
+                self.dprint()
+                code_fail += 1
             if code == 0:
                 percent = int(task_info["percent"])
                 num_done = int(task_info["num_done"])
