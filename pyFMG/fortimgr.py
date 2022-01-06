@@ -460,7 +460,7 @@ class FortiManager(object):
         while percent != 100:
             try:
                 code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
-            except FMGConnectionError:
+            except self.FMGConnectionError:
                 # Set code value to -99 to ensure any future logic is skipped in this failure loop
                 code == -99
                 self.req_resp_object.task_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
