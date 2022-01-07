@@ -208,7 +208,7 @@ class RequestResponse(object):
 class FortiManager(object):
 
     def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 verbose=False, disable_request_warnings=False):
+                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False):
         super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
@@ -225,6 +225,7 @@ class FortiManager(object):
         self._session = requests.session()
         self._req_resp_object = RequestResponse()
         self._logger = None
+        self._track_task_disable_connerr = track_task_disable_connerr
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -282,6 +283,10 @@ class FortiManager(object):
     @property
     def sess(self):
         return self._session
+    
+    @property
+    def track_task_disable_connerr(self, val):
+        self._track_task_disable_connerr = val
 
     @property
     def req_resp_object(self):
@@ -460,13 +465,20 @@ class FortiManager(object):
         while percent != 100:
             try:
                 code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
-            except FMGConnectionError:
-                # Set code value to -99 to ensure any future logic is skipped in this failure loop
-                code == -99
-                self.req_resp_object.error_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
-                    "{timestamp}".format(timestamp=datetime.now())
-                self.dprint()
-                code_fail += 1
+            except FMGConnectionError as err:
+                # If the option is enabled in the config to disable connection
+                # errors on the track_task function, then catch the FMGConnectionError
+                # and try again as the bug does not close the socket
+                if self._track_task_disable_connerr:
+                    # Set code value to -99 to ensure any future logic is skipped in this failure loop
+                    code == -99
+                    self.req_resp_object.error_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
+                        "{timestamp}".format(timestamp=datetime.now())
+                    self.dprint()
+                    code_fail += 1
+                else:
+                    # If the option is not enabled just re-raise the exception
+                    raise
             if code == 0:
                 percent = int(task_info["percent"])
                 num_done = int(task_info["num_done"])
