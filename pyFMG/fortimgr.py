@@ -208,7 +208,7 @@ class RequestResponse(object):
 class FortiManager(object):
 
     def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 verbose=False, disable_request_warnings=False):
+                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False):
         super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
@@ -225,6 +225,7 @@ class FortiManager(object):
         self._session = requests.session()
         self._req_resp_object = RequestResponse()
         self._logger = None
+        self._track_task_disable_connerr = track_task_disable_connerr
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
@@ -282,6 +283,10 @@ class FortiManager(object):
     @property
     def sess(self):
         return self._session
+    
+    @property
+    def track_task_disable_connerr(self, val):
+        self._track_task_disable_connerr = val
 
     @property
     def req_resp_object(self):
@@ -373,6 +378,24 @@ class FortiManager(object):
         else:
             return result["status"]["code"], result
 
+    def _freeform_response(self, resp):
+        try:
+            response = resp.json()
+        except:
+            # response is not able to be decoded into json return 100 as a code and the entire response object
+            return 100, resp
+
+        self._set_sid(response)
+        self.req_resp_object.response_json = response
+        self.dprint()
+
+        # Result is always a list and with free form will include an entry for each URL requested
+        # in the POST request. Setting result to the full result portion of the reponse
+        result = response["result"]
+
+        # Return the full result data set along with 200 as the response code
+        return 200, result
+
     def _post_request(self, method, params, login=False, free_form=False, create_task=None):
         self.req_resp_object.reset()
 
@@ -399,12 +422,8 @@ class FortiManager(object):
             response = self.sess.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
                                       timeout=self.timeout)
             if free_form:
-                try:
-                    res = response.json()
-                    return self._handle_response(response)
-                except:
-                    # response is not able to be decoded into json return 100 as a code and the entire response object
-                    return 100, response
+                # If free_from is set then process using custom response handler
+                return self._freeform_response(response)
             else:
                 return self._handle_response(response)
         except ReqConnError as err:
@@ -433,7 +452,7 @@ class FortiManager(object):
             self.dprint()
             raise FMGBaseException(msg)
 
-    def track_task(self, task_id, sleep_time=5, retrieval_fail_gate=10, timeout=120):
+    def track_task(self, task_id, sleep_time=3, retrieval_fail_gate=10, timeout=120):
         self.req_resp_object.reset()
         begin_task_time = datetime.now()
         start = time.time()
@@ -444,7 +463,22 @@ class FortiManager(object):
         code = 1
         task_info = ""
         while percent != 100:
-            code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
+            try:
+                code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
+            except FMGConnectionError as err:
+                # If the option is enabled in the config to disable connection
+                # errors on the track_task function, then catch the FMGConnectionError
+                # and try again as the bug does not close the socket
+                if self._track_task_disable_connerr:
+                    # Set code value to -99 to ensure any future logic is skipped in this failure loop
+                    code == -99
+                    self.req_resp_object.error_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
+                        "{timestamp}".format(timestamp=datetime.now())
+                    self.dprint()
+                    code_fail += 1
+                else:
+                    # If the option is not enabled just re-raise the exception
+                    raise
             if code == 0:
                 percent = int(task_info["percent"])
                 num_done = int(task_info["num_done"])
