@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import uuid
 from datetime import datetime
 import time
 import logging
@@ -207,13 +207,12 @@ class RequestResponse(object):
 
 class FortiManager(object):
 
-    def __init__(self, host=None, user="", passwd="", debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False):
+    def __init__(self, host=None, user=None, passwd=None, debug=False, use_ssl=True, verify_ssl=False, timeout=300,
+                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False, apikey=None):
         super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
         self._user = user
-        self._passwd = passwd
         self._use_ssl = use_ssl
         self._verify_ssl = verify_ssl
         self._timeout = timeout
@@ -221,6 +220,8 @@ class FortiManager(object):
         self._req_id = 0
         self._sid = None
         self._url = None
+        self._apikeyused = True if passwd is None and apikey is not None else False
+        self._passwd = passwd if passwd is not None else apikey
         self._lock_ctx = FMGLockContext(self)
         self._session = requests.session()
         self._req_resp_object = RequestResponse()
@@ -228,6 +229,14 @@ class FortiManager(object):
         self._track_task_disable_connerr = track_task_disable_connerr
         if disable_request_warnings:
             requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
+    @property
+    def api_key_used(self):
+        return self._apikeyused
+
+    @api_key_used.setter
+    def api_key_used(self, val):
+        self._apikeyused = val
 
     @property
     def debug(self):
@@ -316,7 +325,7 @@ class FortiManager(object):
         try:
             return json.dumps(json_obj, indent=2, sort_keys=True)
         except TypeError as te:
-            return json.dumps({"Type Information": te.message})
+            return json.dumps({"Type Information": str(te)})
 
     def dlog(self):
         if self._logger is not None:
@@ -347,8 +356,12 @@ class FortiManager(object):
         print("\n" + "-" * 100 + "\n")
 
     def _set_sid(self, response):
-        if self.sid is None and "session" in response:
-            self.sid = response["session"]
+        if self.api_key_used:
+            if self.sid is None:
+                self.sid = str(uuid.uuid4()) if self._passwd is None else str(uuid.uuid4()) + "-" + self._passwd[-4:]
+        else:
+            if self.sid is None and "session" in response:
+                self.sid = response["session"]
 
     def lock_adom(self, adom=None, *args, **kwargs):
         return self._lock_ctx.lock_adom(adom, *args, **kwargs)
@@ -402,7 +415,11 @@ class FortiManager(object):
         if self.sid is None and not login:
             raise FMGValidSessionException(method, params)
         self._update_request_id()
-        headers = {"content-type": "application/json"}
+        if self.api_key_used:
+            headers = {"content-type": "application/json",
+                       "Authorization": "Bearer {apikey}".format(apikey=self._passwd)}
+        else:
+            headers = {"content-type": "application/json"}
         json_request = {}
         if create_task:
             json_request["create task"] = create_task
@@ -517,7 +534,10 @@ class FortiManager(object):
 
     def login(self):
         self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
-        self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user, )
+        if self.api_key_used:
+            self._set_sid(None)
+        else:
+            self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user)
         self._lock_ctx.check_mode()
         if self.__str__() == "FortiManager instance connnected to {host}.".format(host=self._host):
             return 0, {"status": {"message": "OK", "code": 0}, "url": "sys/login/user"}
