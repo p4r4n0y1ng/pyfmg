@@ -28,7 +28,7 @@ Continuing, when a FortiManager instance is instantiated, the following attribut
 - verify_ssl (default False),
 - timeout (default 300)
 ```
-For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the user name admin and a password of <blank>, that uses http instead of https, is in debug mode, and warns after the verification of the SSL certificate upon each request and has a timeout of 100 the user would simply type:
+For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the username admin and a password of <blank>, that uses http instead of https, is in debug mode, and warns after the verification of the SSL certificate upon each request and has a timeout of 100 the user would simply type:
 
 ```
 with FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, debug=True, disable_request_warnings=False, timeout=100) as fmg_instance:
@@ -39,6 +39,47 @@ Obviously these same parameters would be used in the standard call if the contex
 ```
 fmg_instance = FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, debug=True, disable_request_warnings=False, timeout=100)
 ```
+
+With the release of FMG 7.2.2 an API User can be created with an API Key (THANK ALL THINGS GOOD!)
+The feature works very much like it does in FOS and is very helpful. However, it clearly calls for a different way 
+to login. We have modified pyFMG so the interface stays very close to the "standard" way you've done things. 
+Basically you will do the following if you're using an API Key. Let's assume that you want to put the API Key in a 
+variable and use that in your login. For a context manager setup you would do the following:
+
+```
+api_key = "reallylongfakeapikeyireceivedfromfmg"
+fmg_instance = FortiManager('10.1.1.1', apikey=api_key) as fmg_instance:
+```
+
+pyFMG takes this information and creates a "session" key just as if you are logging in the old way. That session 
+information is randomly generated and then appended to a dash and the last 4 digits of your API Key. This is for 
+those people who need to track session information (particularly those of you who are threading/multiprocessing etc.)
+
+A for instance of this is that, if you're in debug mode and watching your output you'll see something like
+
+```
+"session": "8862b4d9-256b-43a5-bc2a-71d330978a6b-mfmg"
+```
+
+Notice the "mfmg" there. Again, this will make it where you can track things if needed. If you're not tracking by 
+session, this really doesn't matter to you. However, it's there for those that need it.
+
+If you don't use a context manager, then you do the same basic thing as before...except clearly this time you will 
+use your API Key and not the user, password combo. For instance:
+
+```
+api_key = "reallylongfakeapikeyireceivedfromfmg"
+fmg_instance = FortiManager('10.1.1.1', apikey=api_key)
+fmg_instance.login()
+*something of importance accomplished here*
+fmg_instance.logout()
+```
+
+Notice that login() is still called and still must be used, despite that there really is no initial login. This is 
+so the session can be created and maintained and ensures a consistent interface. The attributes of debug, use_ssl, 
+verify_ssl and timeout remain and can be called in the login area itself or set the same as before. Nothing has 
+changed in this area.
+
 
 A solution has been provided to ensure workspace mode can be handled. When a FMG instance is created, either using the **with** statement as shown above or in a standard scenario (also shown above), the instance checks the FMG for status. At login a call is made to check for status and if *workspace-mode* is returned as anything other than a **0** then workspace capabilities are provided. Standard calls to *lock*, *commit*, and *unlock* are required and are passed through to the workspace manager object for ease of use. If a caller is using the context manager, the workspace manager will now ensure an errant exception does not leave an ADOM stranded in a locked state. The workspace manager functionality will **NOT** call an automatic *commit*, it will simply ensure the *unlock_adom* function is called on any locked ADOM and then will logout. This happens in *logout*, thus a caller could lock an ADOM (or multiple ADOMs), do his work, call *commit* on any ADOM he wants to commit, and then simply call *logout* and then the workspace manager will take care of the unlocks. A common example (using an explicit call to *unlock_adom*) to add an address object might be:
 
