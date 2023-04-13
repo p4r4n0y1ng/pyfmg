@@ -430,7 +430,7 @@ class FortiManager(object):
         else:
             json_request["method"] = method
             json_request["params"] = params
-            if method is "get" and self._verbose is True:
+            if method == "get" and self._verbose is True:
                 json_request["verbose"] = 1
             json_request["session"] = self.sid
             json_request["id"] = self.req_id
