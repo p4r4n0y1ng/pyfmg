@@ -536,6 +536,8 @@ class FortiManager(object):
         self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
         if self.api_key_used:
             self._set_sid(None)
+        elif self._host.endswith(("fortimanager.forticloud.com","fortianalyzer.forticloud.com")):
+            self.login_cloud()
         else:
             self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user)
         self._lock_ctx.check_mode()
@@ -543,6 +545,45 @@ class FortiManager(object):
             return 0, {"status": {"message": "OK", "code": 0}, "url": "sys/login/user"}
         else:
             return -1, {"status": {"message": self, "code": -1}, "url": "sys/login/user"}
+    
+    def login_cloud(self):
+        #
+        # Login to FortiCloud using an IAM API User
+        #  ( https://docs.fortinet.com/document/forticloud/23.3.0/identity-access-management-iam/703535/introduction )
+        #
+        auth_fcl_url = "https://customerapiauth.fortinet.com/api/v1/oauth/token/"
+        auth_fmg_url = "https://" + self._host + "/p/forticloud_jsonrpc_login/"
+        if "fortianalyzer" in self._host:
+            client_id = "FortiAnalyzer"
+        else:
+            client_id = "FortiManager"
+        headers = {
+            "Content-Type": "application/json"
+        }
+        data = {
+            "username": self._user,
+            "password": self._passwd,
+            "client_id" : client_id,
+            "grant_type": "password"
+        }
+        fc_response = requests.post(auth_fcl_url, headers=headers, json=data)
+        fc_resp = json.loads(fc_response.text)
+        access_token = fc_resp['access_token']
+        if fc_response.status_code == 200:
+            data = { 
+                "access_token": access_token 
+            }
+            fmg_response = requests.post(auth_fmg_url, headers=headers, json=data)
+            fmg_resp = json.loads(fmg_response.text)
+            if fmg_response.status_code == 200:
+                self._set_sid(fmg_resp)
+                return 0
+            else:
+                print('FortiManager Cloud Request failed with status code:', response.status_code)
+                print('Response:', response.text)
+        else:
+            print('FortiCloud Request failed with status code:', response.status_code)
+            print('Response:', response.text)
 
     def logout(self):
         if self.sid is not None:
