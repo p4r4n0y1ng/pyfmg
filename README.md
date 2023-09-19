@@ -32,8 +32,8 @@ configured by the user). The list provided lists the defaults.
 - debug (default False),
 - use_ssl (default True),
 - verify_ssl (default False),
-- timeout (default 300)
-- check_adom_workspace (default True),
+- timeout (default 300),
+- check_adom_workspace (default True)
 ```
 
 For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the username admin and a 
