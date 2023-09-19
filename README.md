@@ -5,13 +5,18 @@ Represents the base components of the Fortinet FortiManager JSON-RPC interface. 
 
 Standard format for a FortiManager JSON-RPC is utilized.
 
-**Of Importance** is that this package uses context behavior for the FortiManager instance, so the **with** keyword can be utilized. This ensures that the FortiManager instance is logged into upon instantiation and is logged out of once the scope of the **with** statement is completed. For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the user name admin and a password of <blank>, the user would simply type:
+**Of Importance** is that this package uses context behavior for the FortiManager instance, so the **with** keyword 
+can be utilized. This ensures that the FortiManager instance is logged into upon instantiation and is logged out of 
+once the scope of the **with** statement is completed. For instance, to instantiate a FortiManager instance with the 
+IP address of 10.1.1.1, with the user name admin and a password of <blank>, the user would simply type:
 
 ```
 with FortiManager('10.1.1.1', 'admin', '') as fmg_instance:
 ```
 
-The context manager does not HAVE to be utilized obviously. However, if it is not utilized, the *login* and *logout* functionality is not handled for the caller. It is expected that these methods will be called if the context manager is not utilized. An example would be:
+The context manager does not HAVE to be utilized obviously. However, if it is not utilized, the *login* and *logout* 
+functionality is not handled for the caller. It is expected that these methods will be called if the context manager 
+is not utilized. An example would be:
 
 ```
 fmg_instance = FortiManager('10.1.1.1', 'admin', '')
@@ -20,24 +25,35 @@ fmg_instance.login()
 fmg_instance.logout()
 ```
 
-Continuing, when a FortiManager instance is instantiated, the following attributes are configured (or can be configured by the user). The list provided lists the defaults.
+Continuing, when a FortiManager instance is instantiated, the following attributes are configured (or can be 
+configured by the user). The list provided lists the defaults.
 
 ```
 - debug (default False),
 - use_ssl (default True),
 - verify_ssl (default False),
 - timeout (default 300)
+- check_adom_workspace (default True),
 ```
-For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the username admin and a password of <blank>, that uses http instead of https, is in debug mode, and warns after the verification of the SSL certificate upon each request and has a timeout of 100 the user would simply type:
+
+For instance, to instantiate a FortiManager instance with the IP address of 10.1.1.1, with the username admin and a 
+password of <blank>, that uses http instead of https, is in debug mode, and warns after the verification of the SSL 
+certificate upon each request, has a timeout of 100 and doesn't perform the automated checks for ADOM use and 
+Workspace mode the user would simply type:
 
 ```
-with FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, debug=True, disable_request_warnings=False, timeout=100) as fmg_instance:
+with FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, disable_request_warnings=False, timeout=100, check_adom_workspace=False) as fmg_instance:
 ```
+
+The *check_adom_workspace* option was added to speed up login for those users that don't care about Workspace Mode 
+or having a notification and tracking if ADOMs are used. A clear example of when to set *check_adom_workspace* to 
+False would be a FMG with only the root ADOM or something like the Cloud FMG which at the time of this writing 
+didn't support the use of ADOMs. The login process is significantly faster when *check_adom_workspace* is False
 
 Obviously these same parameters would be used in the standard call if the context manager is not utilized so:
 
 ```
-fmg_instance = FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, debug=True, disable_request_warnings=False, timeout=100)
+fmg_instance = FortiManager('10.1.1.1', 'admin', '', debug=True, use_ssl=False, disable_request_warnings=False, timeout=100, check_adom_workspace=False)
 ```
 
 With the release of FMG 7.2.2 an API User can be created with an API Key (THANK ALL THINGS GOOD!)
@@ -55,7 +71,7 @@ pyFMG takes this information and creates a "session" key just as if you are logg
 information is randomly generated and then appended to a dash and the last 4 digits of your API Key. This is for 
 those people who need to track session information (particularly those of you who are threading/multiprocessing etc.)
 
-A for instance of this is that, if you're in debug mode and watching your output you'll see something like
+For instance, if you're in debug mode and watching your output you'll see something like
 
 ```
 "session": "8862b4d9-256b-43a5-bc2a-71d330978a6b-mfmg"
@@ -77,11 +93,47 @@ fmg_instance.logout()
 
 Notice that login() is still called and still must be used, despite that there really is no initial login. This is 
 so the session can be created and maintained and ensures a consistent interface. The attributes of debug, use_ssl, 
-verify_ssl and timeout remain and can be called in the login area itself or set the same as before. Nothing has 
-changed in this area.
+verify_ssl, timeout and check_adom_workspace remain and can be called in the login area itself or set the same as 
+before. Nothing has changed in this area.
 
 
-A solution has been provided to ensure workspace mode can be handled. When a FMG instance is created, either using the **with** statement as shown above or in a standard scenario (also shown above), the instance checks the FMG for status. At login a call is made to check for status and if *workspace-mode* is returned as anything other than a **0** then workspace capabilities are provided. Standard calls to *lock*, *commit*, and *unlock* are required and are passed through to the workspace manager object for ease of use. If a caller is using the context manager, the workspace manager will now ensure an errant exception does not leave an ADOM stranded in a locked state. The workspace manager functionality will **NOT** call an automatic *commit*, it will simply ensure the *unlock_adom* function is called on any locked ADOM and then will logout. This happens in *logout*, thus a caller could lock an ADOM (or multiple ADOMs), do his work, call *commit* on any ADOM he wants to commit, and then simply call *logout* and then the workspace manager will take care of the unlocks. A common example (using an explicit call to *unlock_adom*) to add an address object might be:
+The ability to login to FMG Cloud instances has been added to pyFMG. 
+These instances have a URL of {numbers}.{location}.fortimanager.forticloud.com. When pyFMG sees the "fortimanager.
+forticloud.com" moniker it maintains a value to ensure proper login functionality for FortiCloud portal and assets. 
+Information can be found here: https://docs.fortinet.com/document/forticloud/23.3.0/identity-access-management-iam/703535/introduction  
+
+In summary the value is kept and login is sent initially with the username and password as discussed above. However, 
+an access token is given back after initial login and then a session is established with that token. Once the 
+session is provided back to pyFMG the session identifier is set as discussed above and the process continues. pyFMG 
+does not currently work with 2FA in this setup but that will be added if the requirement is levied by multiple users 
+of the tool. To login to the FortiCloud instance the process looks very much the same as above. This example will 
+utilize the context manager, but without the context manager the login() and logout() function is used as already 
+explained.
+
+```
+with FortiManager('{numbers}.{location}.fortimanager.forticloud.com', 'admin', '', debug=True, check_adom_workspace=False) as fmg_instance:
+```
+
+The OAuth process, to include getting the token and passing it to the portal for a session, is transparent to the pyFMG 
+user. pyFMG sends a call to revoke the OAuth token once a session is established with the FMG so that the token 
+cannot be abused between its creation and timeout.
+
+**As a note for those of you that have helped me with this project, If more logins become necessary pyFMG may change 
+this concept to a decorator type so many more login functions can be added as required.**
+
+A solution has been provided to ensure workspace mode can be handled. (See above on the *check_adom_workspace* 
+option to turn this off).
+
+When a FMG instance is created, either using the **with** statement as shown above or in a standard scenario (also 
+shown above), the instance checks the FMG for status. At login a call is made to check for status and if 
+*workspace-mode* is returned as anything other than a **0** then workspace capabilities are provided.  Standard calls 
+to *lock*, *commit*, and *unlock* are required and are passed through to the workspace manager object for ease of 
+use. If a caller is using the context manager, the workspace manager will now ensure an errant exception does not 
+leave an ADOM stranded in a locked state. The workspace manager functionality will **NOT** call an automatic 
+*commit*, it will simply ensure the *unlock_adom* function is called on any locked ADOM and then will logout. This 
+happens in *logout*, thus a caller could lock an ADOM (or multiple ADOMs), do his work, call *commit* on any ADOM he 
+wants to commit, and then simply call *logout* and then the workspace manager will take care of the unlocks. A 
+common example (using an explicit call to *unlock_adom*) to add an address object might be:
 
 ```
 fmg_instance.lock_adom("root")
@@ -90,7 +142,8 @@ fmg_instance.commit_changes("root")
 fmg_instance.unlock_adom("root")
 fmg_instance.logout()
 ```
-The following would perform the same and would also unlock the *root* ADOM on the way out (notice no call to *unlock_adom* is required here):
+The following would perform the same and would also unlock the *root* ADOM on the way out (notice no call to 
+*unlock_adom* is required here):
 
 ```
 fmg_instance.lock_adom("root")
@@ -99,7 +152,14 @@ fmg_instance.commit_changes("root")
 fmg_instance.logout()
 ```
 
-While this module is meant to be utilized with another caller-written abstraction, there is no reason that this module could not be utilized by itself to make detailed, multi-parameter calls. To that end, a capability has been provided that enables keyword/value arguments to be passed into any of the *get*, *add*, *update* ,*delete* ,*set* ,*replace* ,*clone* ,*execute* , or *move* helper methods. Since there are many keywords in the FortiManager body that require a dash (and since the dash character is not allowed as a keyword argument handled by the **\**kwargs** pointer), a facility has been added such that a keyword with a double underscore **__** is automatically translated into a dash **-** when the keyword/value pair is put into the body of the call. An example follows (notice the double underscores in the keyword items, these will be translated to dashes when the call is made):
+While this module is meant to be utilized with another caller-written abstraction, there is no reason that this 
+module could not be utilized by itself to make detailed, multi-parameter calls. To that end, a capability has been 
+provided that enables keyword/value arguments to be passed into any of the *get*, *add*, *update* ,*delete* ,*set* ,
+*replace* ,*clone* ,*execute* , or *move* helper methods. Since there are many keywords in the FortiManager body 
+that require a dash (and since the dash character is not allowed as a keyword argument handled by the **\**kwargs** 
+pointer), a facility has been added such that a keyword with a double underscore **__** is automatically translated 
+into a dash **-** when the keyword/value pair is put into the body of the call. An example follows (notice the 
+double underscores in the keyword items, these will be translated to dashes when the call is made):
 
 ```
 fmg_instance.add('pm/config/adom/{adom}/obj/firewall/address'.format(adom="root"), allow__routing=0, associated__interface='any', name='add_obj_name', subnet=["192.168.1.0", "255.255.255.0"], type=0, comment='API address obj addition')
@@ -124,6 +184,7 @@ The module provides the following exceptions for use:
 5. FMGConnectionError(ReqConnError)
 6. FMGConnectTimeout(ReqConnTimeout)
 7. FMGRequestNotFormedCorrect(FMGBaseException)
+8. FMGOAuthTokenError(FMGBaseException)
 
 **FMGBaseException** is the Base exception for the module and can be used to catch all things outside of the ValueError and Keyerror issues.
 
@@ -144,6 +205,8 @@ except FMGBaseException:
 **FMGConnectionError** and **FMGConnectTimeout** are raised when a *requests.exception.ConnectionError* or *requests.exceptions.ConnectTimeout* exception is caught. This ensures calling code does not need to import/depend on the requests module to handle requests connection exceptions. *FMGConnectionError* will most likely be thrown at *login()* and are likely due to an incorrect hostname, or IP Address of the FMG appliance.
 
 **FMGRequestNotFormedCorrect** will be raised when a request for free form capability is issued and the request format is not correct. Specifically a *data* keyword is required to be passed in and the value must be a dictionary. See the ```free_form()``` method explanation below
+
+**FMGOAuthTokenError** is raised when a *json.JSONDecodeError* exception is caught during a login attempt which currently will only happen during the OAuth action.
 
 Exceptions are allowed to propogate up to the caller and are only caught in certain cases where they will be needed in case verbose mode is asked for and the caller wants a print out of the exception. After the print is accomplished that same exception will be raised and propogated so it can be either caught and handled by the caller or used as a debug tool.
 
@@ -257,7 +320,8 @@ Installation of this package will be via the pip interface
 
 Utilizing the library is relatively simple.
 
-Assuming you are within the with context and still using **fmg_instance** as before, to get all managed devices in the **root** adom, the following would be used:
+Assuming you are within the with context and still using **fmg_instance** as before, to get all managed devices in 
+the **root** adom, the following would be used:
 
 ```
 fmg_instance.get(url to get devices for FortiManager version)
@@ -276,7 +340,10 @@ data = {
 fmg_instance.add(URL to add address group objects for FortiManager version, **data)
 ```
 
-Notice how the **data** dictionary is created and then sent in as **\**data**. This is because there are dashes in the keys of the dictionary that is required and dashes are not allowed in a keyword argument setup. For instance, let's assume that **allow-routing** and **associated-interface** are not required for this call. In that case, the call could have been:
+Notice how the **data** dictionary is created and then sent in as **\**data**. This is because there are dashes in 
+the keys of the dictionary that is required and dashes are not allowed in a keyword argument setup. For instance, 
+let's assume that **allow-routing** and **associated-interface** are not required for this call. In that case, the 
+call could have been:
 
 ```
 fmg_instance.add(URL to add address object for FortiManager version, name='test_addr_object', subnet=['10.1.1.0', '255.255.255.255'],type=0)
