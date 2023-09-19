@@ -62,6 +62,13 @@ class FMGRequestNotFormedCorrect(FMGBaseException):
         super(FMGRequestNotFormedCorrect, self).__init__(msg=msg, *args, **kwargs)
 
 
+class FMGOAuthTokenError(FMGBaseException):
+    """Wrap it as a Base Exception we know it is likely a connection issue and we can't do much past that"""
+
+    def __init__(self, msg=None, *args, **kwargs):
+        super(FMGOAuthTokenError, self).__init__(msg=msg, *args, **kwargs)
+
+
 class FMGLockContext(object):
 
     def __init__(self, fmg):
@@ -95,6 +102,10 @@ class FMGLockContext(object):
             self._locked_adom_list.remove(adom)
 
     def check_mode(self):
+        if not self._fmg.check_adom_workspace:
+            self.uses_workspace = False
+            self.uses_adoms = False
+            return
         url = "/cli/global/system/global"
         code, resp_obj = self._fmg.get(url, fields=["workspace-mode", "adom-status"])
         try:
@@ -208,7 +219,8 @@ class RequestResponse(object):
 class FortiManager(object):
 
     def __init__(self, host=None, user=None, passwd=None, debug=False, use_ssl=True, verify_ssl=False, timeout=300,
-                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False, apikey=None):
+                 verbose=False, track_task_disable_connerr=False, disable_request_warnings=False, apikey=None,
+                 check_adom_workspace=True):
         super(FortiManager, self).__init__()
         self._debug = debug
         self._host = host
@@ -217,10 +229,13 @@ class FortiManager(object):
         self._verify_ssl = verify_ssl
         self._timeout = timeout
         self._verbose = verbose
+        self._check_adom_workspace = check_adom_workspace
         self._req_id = 0
         self._sid = None
         self._url = None
         self._apikeyused = True if passwd is None and apikey is not None else False
+        self._forticloudused = True if host.endswith(("fortimanager.forticloud.com", "fortianalyzer.forticloud.com")) \
+            else False
         self._passwd = passwd if passwd is not None else apikey
         self._lock_ctx = FMGLockContext(self)
         self._session = requests.session()
@@ -237,6 +252,22 @@ class FortiManager(object):
     @api_key_used.setter
     def api_key_used(self, val):
         self._apikeyused = val
+
+    @property
+    def forticloud_used(self):
+        return self._forticloudused
+
+    @forticloud_used.setter
+    def forticloud_used(self, val):
+        self._forticloudused = val
+
+    @property
+    def check_adom_workspace(self):
+        return self._check_adom_workspace
+
+    @check_adom_workspace.setter
+    def check_adom_workspace(self, val):
+        self._check_adom_workspace = val
 
     @property
     def debug(self):
@@ -294,8 +325,8 @@ class FortiManager(object):
         return self._session
     
     @property
-    def track_task_disable_connerr(self, val):
-        self._track_task_disable_connerr = val
+    def track_task_disable_connerr(self):
+        return self._track_task_disable_connerr
 
     @property
     def req_resp_object(self):
@@ -372,7 +403,7 @@ class FortiManager(object):
     def commit_changes(self, adom=None, aux=False, *args, **kwargs):
         return self._lock_ctx.commit_changes(adom, aux, *args, **kwargs)
 
-    def _handle_response(self, resp):
+    def _handle_response(self, resp, login=False):
         try:
             response = resp.json()
         except:
@@ -382,6 +413,10 @@ class FortiManager(object):
         self._set_sid(response)
         self.req_resp_object.response_json = response
         self.dprint()
+
+        if self.forticloud_used and login:
+            return resp.status_code, {}
+
         if type(response["result"]) is list:
             result = response["result"][0]
         else:
@@ -395,7 +430,7 @@ class FortiManager(object):
         try:
             response = resp.json()
         except:
-            # response is not able to be decoded into json return 100 as a code and the entire response object
+            # response is not decodable into json. return 100 as a code and the entire response object
             return 100, resp
 
         self._set_sid(response)
@@ -409,17 +444,98 @@ class FortiManager(object):
         # Return the full result data set along with 200 as the response code
         return 200, result
 
-    def _post_request(self, method, params, login=False, free_form=False, create_task=None):
-        self.req_resp_object.reset()
+    @staticmethod
+    def _get_oauth_token(url, headers, data):
+        res = requests.post(url, headers=headers, json=data)
+        if res.status_code == 200:
+            fac_res = json.loads(res.text)
+            return 200, fac_res
+        else:
+            return 100, res
 
-        if self.sid is None and not login:
-            raise FMGValidSessionException(method, params)
+    def _revoke_oauth_token(self, url, headers, token):
+        # if token worked revoke it, no need to wait on the timeout
+        # if it failed this call will fail - which really doesn't matter
+        client_id = "FortiAnalyzer" if "fortianalyzer" in self._host else "FortiManager"
+        rev_data = {
+            "client_id": client_id,
+            "token": token
+        }
+        requests.post(url, headers=headers, json=rev_data)
+
+    def _post_login_request(self, method, params):
         self._update_request_id()
+        json_request = {}
+        token = ""
+        headers = {"content-type": "application/json"}
+        if self.api_key_used:
+            pass
+        elif self.forticloud_used:
+            fac_data = {
+                "username": self._user,
+                "password": self._passwd,
+                "client_id": "FortiAnalyzer" if "fortianalyzer" in self._host else "FortiManager",
+                "grant_type": "password"
+            }
+            code, res = self._get_oauth_token("https://customerapiauth.fortinet.com/api/v1/oauth/token/",
+                                              headers=headers, data=fac_data)
+            token = res.get("access_token", "")
+            json_request["access_token"] = token
+        else:
+            json_request["method"] = method
+            json_request["params"] = params
+            json_request["session"] = self.sid
+            json_request["id"] = self.req_id
+        self.req_resp_object.request_json = json_request
+        try:
+            response = self.sess.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
+                                      timeout=self.timeout)
+            if self.forticloud_used:
+                rev_url = "https://customerapiauth.fortinet.com/api/v1/oauth/revoke_token/"
+                self._revoke_oauth_token(rev_url, headers, token)
+
+            return self._handle_response(response, login=True)
+        except ReqConnError as err:
+            msg = "Connection error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGConnectionError(msg)
+        except json.JSONDecodeError as err:
+            msg = "JSON Decode error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGOAuthTokenError(msg)
+        except ValueError as err:
+            msg = "Value error: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGValueError(msg)
+        except KeyError as err:
+            msg = "Key error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGResponseNotFormedCorrect(msg)
+        except IndexError as err:
+            msg = "Index error in response: {err_type} {err}\n\n".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGResponseNotFormedCorrect(msg)
+        except Exception as err:
+            msg = "Response parser error: {err_type} {err}".format(err_type=type(err), err=err)
+            self.req_resp_object.error_msg = msg
+            self.dprint()
+            raise FMGBaseException(msg)
+
+    def _post_request(self, method, params, free_form=False, create_task=None):
         if self.api_key_used:
             headers = {"content-type": "application/json",
                        "Authorization": "Bearer {apikey}".format(apikey=self._passwd)}
         else:
             headers = {"content-type": "application/json"}
+        self.req_resp_object.reset()
+        if self.sid is None:
+            raise FMGValidSessionException(method, params)
+        self._update_request_id()
         json_request = {}
         if create_task:
             json_request["create task"] = create_task
@@ -436,8 +552,8 @@ class FortiManager(object):
             json_request["id"] = self.req_id
         self.req_resp_object.request_json = json_request
         try:
-            response = self.sess.post(self._url, data=json.dumps(json_request), headers=headers, verify=self.verify_ssl,
-                                      timeout=self.timeout)
+            response = self.sess.post(self._url, data=json.dumps(json_request), verify=self.verify_ssl,
+                                      timeout=self.timeout, headers=headers)
             if free_form:
                 # If free_from is set then process using custom response handler
                 return self._freeform_response(response)
@@ -486,9 +602,9 @@ class FortiManager(object):
                 # If the option is enabled in the config to disable connection
                 # errors on the track_task function, then catch the FMGConnectionError
                 # and try again as the bug does not close the socket
-                if self._track_task_disable_connerr:
+                if self.track_task_disable_connerr:
                     # Set code value to -99 to ensure any future logic is skipped in this failure loop
-                    code == -99
+                    code = -99
                     self.req_resp_object.error_msg = "RemoteDisconnect Issue (FMG BugID: 0703585) occured at " \
                         "{timestamp}".format(timestamp=datetime.now())
                     self.dprint()
@@ -536,54 +652,21 @@ class FortiManager(object):
         self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
         if self.api_key_used:
             self._set_sid(None)
-        elif self._host.endswith(("fortimanager.forticloud.com","fortianalyzer.forticloud.com")):
-            self.login_cloud()
+        elif self.forticloud_used:
+            self._url = "https://{host}/p/forticloud_jsonrpc_login/".format(host=self._host)
+            self._post_login_request("post", None)
+            self._url = "{proto}://{host}/jsonrpc".format(proto="https" if self._use_ssl else "http", host=self._host)
         else:
-            self.execute("sys/login/user", login=True, passwd=self._passwd, user=self._user)
+            self._post_login_request("exec",
+                                     self.common_datagram_params("execute", "sys/login/user",
+                                                                 passwd=self._passwd, user=self._user))
         self._lock_ctx.check_mode()
-        if self.__str__() == "FortiManager instance connnected to {host}.".format(host=self._host):
-            return 0, {"status": {"message": "OK", "code": 0}, "url": "sys/login/user"}
+        login_url = "https://{host}/p/forticloud_jsonrpc_login/".format(host=self._host) if self.forticloud_used \
+            else "sys/login/user"
+        if self.__str__() == "FortiManager instance connected to {host}.".format(host=self._host):
+            return 0, {"status": {"message": "OK", "code": 0}, "url": login_url}
         else:
-            return -1, {"status": {"message": self, "code": -1}, "url": "sys/login/user"}
-    
-    def login_cloud(self):
-        #
-        # Login to FortiCloud using an IAM API User
-        #  ( https://docs.fortinet.com/document/forticloud/23.3.0/identity-access-management-iam/703535/introduction )
-        #
-        auth_fcl_url = "https://customerapiauth.fortinet.com/api/v1/oauth/token/"
-        auth_fmg_url = "https://" + self._host + "/p/forticloud_jsonrpc_login/"
-        if "fortianalyzer" in self._host:
-            client_id = "FortiAnalyzer"
-        else:
-            client_id = "FortiManager"
-        headers = {
-            "Content-Type": "application/json"
-        }
-        data = {
-            "username": self._user,
-            "password": self._passwd,
-            "client_id" : client_id,
-            "grant_type": "password"
-        }
-        fc_response = requests.post(auth_fcl_url, headers=headers, json=data)
-        fc_resp = json.loads(fc_response.text)
-        access_token = fc_resp['access_token']
-        if fc_response.status_code == 200:
-            data = { 
-                "access_token": access_token 
-            }
-            fmg_response = requests.post(auth_fmg_url, headers=headers, json=data)
-            fmg_resp = json.loads(fmg_response.text)
-            if fmg_response.status_code == 200:
-                self._set_sid(fmg_resp)
-                return 0
-            else:
-                print('FortiManager Cloud Request failed with status code:', response.status_code)
-                print('Response:', response.text)
-        else:
-            print('FortiCloud Request failed with status code:', response.status_code)
-            print('Response:', response.text)
+            return -1, {"status": {"message": self, "code": -1}, "url": login_url}
 
     def logout(self):
         if self.sid is not None:
@@ -640,8 +723,8 @@ class FortiManager(object):
     def clone(self, url, *args, **kwargs):
         return self._post_request("clone", self.common_datagram_params("clone", url, *args, **kwargs))
 
-    def execute(self, url, login=False, *args, **kwargs):
-        return self._post_request("exec", self.common_datagram_params("execute", url, *args, **kwargs), login)
+    def execute(self, url, *args, **kwargs):
+        return self._post_request("exec", self.common_datagram_params("execute", url, *args, **kwargs))
 
     def move(self, url, *args, **kwargs):
         return self._post_request("move", self.common_datagram_params("move", url, *args, **kwargs))
