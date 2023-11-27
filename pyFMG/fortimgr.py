@@ -744,7 +744,7 @@ class FortiManager(object):
 
     def __str__(self):
         if self.sid is not None:
-            return "FortiManager instance connnected to {host}.".format(host=self._host)
+            return "FortiManager instance connected to {host}.".format(host=self._host)
         return "FortiManager object with no valid connection to a FortiManager appliance."
 
     def __repr__(self):
