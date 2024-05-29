@@ -695,6 +695,8 @@ class FortiManager(object):
                 kwargs[k.replace("___", " ").replace("__", "-")] = kwargs.pop(k)
             if method_type == "get" or method_type == "clone":
                 params[0].update(kwargs)
+            elif method_type == "execute" and "workflow" in kwargs: 
+                params[0]["workflow"] = kwargs["workflow"]
             else:
                 if kwargs.get("data", False):
                     params[0]["data"] = kwargs["data"]
