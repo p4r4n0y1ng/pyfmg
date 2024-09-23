@@ -109,12 +109,12 @@ class FMGLockContext(object):
         url = "/cli/global/system/global"
         code, resp_obj = self._fmg.get(url, fields=["workspace-mode", "adom-status"])
         try:
-            if resp_obj["workspace-mode"] != 0:
+            if resp_obj["workspace-mode"] not in [0, "disabled"]:
                 self.uses_workspace = True
         except KeyError:
             self.uses_workspace = False
         try:
-            if resp_obj["adom-status"] == 1:
+            if resp_obj["adom-status"] in [1, "enable"]:
                 self.uses_adoms = True
         except KeyError:
             self.uses_adoms = False
