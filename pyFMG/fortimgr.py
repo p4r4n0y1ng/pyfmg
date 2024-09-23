@@ -585,17 +585,22 @@ class FortiManager(object):
             self.dprint()
             raise FMGBaseException(msg)
 
-    def track_task(self, task_id, sleep_time=3, retrieval_fail_gate=10, timeout=120):
+    def _delete_task (self, task_id):
+        code, task_info = self.delete("/task/task/{taskid}".format(taskid=task_id))
+
+    def track_task(self, task_id, sleep_time=3, retrieval_fail_gate=10, timeout=120, delete_task_on_timeout=False, timeout_only=True, zero_percent_timeout=30, task_stale_timeout=60):
         self.req_resp_object.reset()
         begin_task_time = datetime.now()
         start = time.time()
         self.req_resp_object.error_msg = "Task begins at {time}".format(time=str(begin_task_time))
         self.dprint()
+        track_task = True
+        last_percent = 0
         percent = 0
         code_fail = 0
         code = 1
         task_info = ""
-        while percent != 100:
+        while track_task:
             try:
                 code, task_info = self.get("/task/task/{taskid}".format(taskid=task_id))
             except FMGConnectionError as err:
@@ -613,13 +618,16 @@ class FortiManager(object):
                     # If the option is not enabled just re-raise the exception
                     raise
             if code == 0:
+                last_percent = percent
                 percent = int(task_info["percent"])
                 num_done = int(task_info["num_done"])
                 num_err = int(task_info["num_err"])
                 num_lines = int(task_info["num_lines"])
-                self.req_resp_object.task_msg = "At timestamp {timestamp}:\nTask {taskid} is at {percent}% " \
-                                                "completion.\n{num_err} tasks have returned an error.".\
-                    format(timestamp=datetime.now(), taskid=str(task_id), percent=str(percent),
+                start_tm = int(task_info["start_tm"])
+                task_duration = (time.time() - start_tm)
+                self.req_resp_object.error_msg = "At timestamp {timestamp}:\nTask {taskid} is at {percent}% " \
+                                                "completion and has been running {task_duration} seconds.\n{num_err} tasks have returned an error.".\
+                    format(timestamp=datetime.now(), taskid=str(task_id), percent=str(percent), task_duration=str(task_duration),
                            num_done=str(num_done), num_lines=str(num_lines), num_err=str(num_err))
                 self.dprint()
             else:
@@ -630,14 +638,37 @@ class FortiManager(object):
                     format(taskid=task_id, fail_gate=retrieval_fail_gate)
                 self.dprint()
                 return code, task_info
-            if percent != 100:
-                if time.time() - start >= timeout:
-                    msg = "Task did not complete in efficient time. The timeout value was {}".format(timeout)
-                    self.req_resp_object.error_msg = msg
-                    self.dprint()
-                    return 1, {"msg": msg}
-                else:
-                    time.sleep(sleep_time)
+            if percent == 100:
+                track_task = False
+            elif task_duration >= timeout:
+                track_task = False
+                msg = "Task {taskid} did not complete in efficient time and timed out. The timeout value was {timeout}.".format(taskid=str(task_id),timeout=timeout)
+                if delete_task_on_timeout:
+                    msg += " The task will be deleted."
+                    self._delete_task(task_id)
+                self.req_resp_object.error_msg = msg
+                self.dprint()
+                return 1, {"msg": msg}, task_info
+            elif not timeout_only and percent == 0 and task_duration >= zero_percent_timeout:
+                track_task = False
+                msg = "Task {taskid} did not progress past zero percent in an efficient time. The zero_percent_timeout value was {timeout}.".format(taskid=str(task_id),timeout=zero_percent_timeout)
+                if delete_task_on_timeout:
+                    msg += " The task will be deleted."
+                    self._delete_task(task_id)
+                self.req_resp_object.error_msg = msg
+                self.dprint()
+                return 1, {"msg": msg}, task_info
+            elif not timeout_only and last_percent > 0 and last_percent == percent and task_duration >= task_stale_timeout:
+                track_task = False
+                msg = "Task {taskid} did not progress in the desired time. The task_stale_timeout value was {timeout}.".format(taskid=str(task_id),timeout=task_stale_timeout)
+                if delete_task_on_timeout:
+                    msg += " The task will be deleted."
+                    self._delete_task(task_id)
+                self.req_resp_object.error_msg = msg
+                self.dprint()
+                return 1, {"msg": msg}, task_info
+            else:
+                time.sleep(sleep_time)
         self.req_resp_object.reset()
         end_task_time = datetime.now()
         task_info["total_task_time"] = str(end_task_time - begin_task_time)
