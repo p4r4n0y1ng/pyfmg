@@ -641,6 +641,7 @@ class FortiManager(object):
             if percent == 100:
                 track_task = False
             elif task_duration >= timeout:
+                track_task = False
                 msg = "Task {taskid} did not complete in efficient time and timed out. The timeout value was {timeout}.".format(taskid=str(task_id),timeout=timeout)
                 if delete_task_on_timeout:
                     msg += " The task will be deleted."
