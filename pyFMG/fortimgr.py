@@ -648,7 +648,7 @@ class FortiManager(object):
                     self._delete_task(task_id)
                 self.req_resp_object.error_msg = msg
                 self.dprint()
-                return 1, {"msg": msg}, task_info
+                return 1, {"msg": msg}
             elif not timeout_only and percent == 0 and task_duration >= zero_percent_timeout:
                 track_task = False
                 msg = "Task {taskid} did not progress past zero percent in an efficient time. The zero_percent_timeout value was {timeout}.".format(taskid=str(task_id),timeout=zero_percent_timeout)
@@ -657,7 +657,8 @@ class FortiManager(object):
                     self._delete_task(task_id)
                 self.req_resp_object.error_msg = msg
                 self.dprint()
-                return 1, {"msg": msg}, task_info
+                task_info["msg"] = msg
+                return 1, task_info
             elif not timeout_only and last_percent > 0 and last_percent == percent and task_duration >= task_stale_timeout:
                 track_task = False
                 msg = "Task {taskid} did not progress in the desired time. The task_stale_timeout value was {timeout}.".format(taskid=str(task_id),timeout=task_stale_timeout)
@@ -666,7 +667,8 @@ class FortiManager(object):
                     self._delete_task(task_id)
                 self.req_resp_object.error_msg = msg
                 self.dprint()
-                return 1, {"msg": msg}, task_info
+                task_info["msg"] = msg
+                return 1, task_info
             else:
                 time.sleep(sleep_time)
         self.req_resp_object.reset()
