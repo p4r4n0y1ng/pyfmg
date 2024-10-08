@@ -543,6 +543,7 @@ class FortiManager(object):
             json_request["params"] = params
             json_request["session"] = self.sid
             json_request["id"] = self.req_id
+            json_request["jsonrpc"] = "2.0"
         else:
             json_request["method"] = method
             json_request["params"] = params
@@ -550,6 +551,7 @@ class FortiManager(object):
                 json_request["verbose"] = 1
             json_request["session"] = self.sid
             json_request["id"] = self.req_id
+            json_request["jsonrpc"] = "2.0"
         self.req_resp_object.request_json = json_request
         try:
             response = self.sess.post(self._url, data=json.dumps(json_request), verify=self.verify_ssl,
