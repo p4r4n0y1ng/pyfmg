@@ -703,6 +703,9 @@ class FortiManager(object):
 
     def logout(self):
         if self.sid is not None:
+            if self.api_key_used:
+                self.sid = None
+                return
             if self._lock_ctx.uses_workspace:
                 self._lock_ctx.run_unlock()
             ret_code, response = self.execute("sys/logout")
