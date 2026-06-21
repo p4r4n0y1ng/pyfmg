@@ -1,0 +1,45 @@
+# Method 1: Update .coveragerc to put files in coverage/ directory
+[run]
+source = pyFMG
+# Put the .coverage data file in a subdirectory
+data_file = coverage/.coverage
+omit = 
+    */tests/*
+    */test_*
+    setup.py
+    */venv/*
+    */__pycache__/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self\.debug
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*Exception.*:
+    class .*Error.*:
+    def __init__.*Exception.*:
+    def __init__.*Error.*:
+    raise FMGBaseException
+    raise FMGValidSessionException
+    raise FMGValueError
+    raise FMGResponseNotFormedCorrect
+    raise FMGConnectionError
+    raise FMGConnectTimeout
+    raise FMGRequestNotFormedCorrect
+    raise FMGOAuthTokenError
+    @(abc\.)?abstractmethod
+
+show_missing = True
+precision = 2
+
+[html]
+# HTML report goes in coverage/htmlcov
+directory = coverage/htmlcov
+
+[xml]
+# XML report goes in coverage/ directory  
+output = coverage/coverage.xml
